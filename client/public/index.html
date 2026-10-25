@@ -523,41 +523,29 @@ async function toggleMic() {
 //  SOCKET.IO
 // ════════════════════════════════════════════════════════════════════════════
 async function joinSpace() {
-  if (socket && socket.connected) return; // prevent double-join
+  if (socket && socket.connected) return;
   myName = nameInput.value.trim() || 'Anonymous';
 
   const joinBtn = document.querySelector('#join-screen button');
-
-  // Step 1: Wake the Render server (free tier sleeps after inactivity)
-  joinBtn.textContent = '⏳ Waking server...';
-  joinBtn.disabled = true;
-  statusTxt.textContent = 'Pinging server — this takes up to 30s on first load...';
   const joinStatus = document.getElementById('join-status');
-  if (joinStatus) joinStatus.textContent = '⏳ Waking server up... (first load may take 30s)';
-
-  try {
-    await fetch(SERVER + '/health', { method: 'GET', cache: 'no-cache' });
-  } catch (e) { /* server may be sleeping — socket will retry */ }
-
-  // Step 2: Connect socket
   joinBtn.textContent = '🔌 Connecting...';
-  statusTxt.textContent = 'Connecting...';
+  joinBtn.disabled = true;
+  if (joinStatus) joinStatus.textContent = 'Connecting to localhost...';
 
   if (socket) { socket.disconnect(); socket = null; }
 
-  socket = io(SERVER, {
-    transports: ['polling', 'websocket'],
-    upgrade: true,
+  socket = io('http://localhost:3001', {
+    transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionAttempts: 5,
-    reconnectionDelay: 2000,
-    timeout: 60000,   // 60s — enough for Render cold start
-    extraHeaders: { 'ngrok-skip-browser-warning': 'true' }
+    reconnectionDelay: 1000,
+    timeout: 10000
   });
 
   socket.on('connect', () => {
     connDot.classList.add('on');
     statusTxt.textContent = `Connected · ${myName}`;
+    if (joinStatus) joinStatus.textContent = '';
     socket.emit('join', { name: myName, x: myX, y: myY });
     joinScr.style.display = 'none';
     gameScr.style.display = 'flex';
@@ -578,7 +566,8 @@ async function joinSpace() {
 
   socket.on('connect_error', (err) => {
     connDot.classList.remove('on');
-    statusTxt.textContent = `❌ Error: ${err.message} — click Join to retry`;
+    statusTxt.textContent = `❌ Cannot reach server`;
+    if (joinStatus) joinStatus.textContent = `❌ Error: ${err.message} — is the server running?`;
     log(`Connection error: ${err.message}`, 'lr');
     console.error('Socket connect_error:', err);
     joinBtn.textContent = 'Join Space';
