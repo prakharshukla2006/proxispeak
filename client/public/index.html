@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProxiSpeak — Week 3: Scaling + Dynamic Attenuation</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f172a; color: #e2e8f0;
+      display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 16px; background: #1e293b;
+      border-bottom: 1px solid #334155; flex-shrink: 0;
+    }
+    header h1 { font-size: 16px; font-weight: 700; color: #a5b4fc; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #ef4444; transition: background 0.3s; }
+    .dot.on { background: #10b981; }
+    #status-text { font-size: 12px; color: #64748b; flex: 1; }
+    .hbtn {
+      padding: 4px 12px; border-radius: 5px; font-size: 12px; cursor: pointer;
+      border: 1px solid #334155; background: #1e293b; color: #cbd5e1;
+      transition: all 0.2s;
+    }
+    .hbtn:hover { background: #334155; }
+    .hbtn.active { background: #10b981; border-color: #10b981; color: #fff; }
+    #instance-badge {
+      font-size: 10px; padding: 2px 8px; border-radius: 999px;
+      background: #1e1b4b; color: #818cf8; border: 1px solid #312e81;
+    }
+
+    /* ── Join ── */
+    #join-screen {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; flex: 1; gap: 14px;
+    }
+    #join-screen h2 { font-size: 22px; }
+    #join-screen p  { font-size: 13px; color: #64748b; max-width: 360px; text-align: center; }
+    #join-screen input {
+      padding: 10px 16px; border-radius: 8px; border: 1px solid #475569;
+      background: #1e293b; color: white; font-size: 15px; width: 260px;
+    }
+    #join-screen button {
+      padding: 10px 28px; background: #4f46e5; color: white;
+      border: none; border-radius: 8px; font-size: 15px; cursor: pointer;
+    }
+    #join-screen button:hover { background: #4338ca; }
+
+    /* ── Main ── */
+    #game-screen { display: none; flex: 1; flex-direction: row; overflow: hidden; min-height: 0; }
+
+    /* ── Canvas ── */
+    #canvas-wrap { flex: 1; position: relative; overflow: hidden; }
+    canvas { display: block; cursor: crosshair; }
+    #move-hint {
+      position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+      font-size: 11px; color: #334155; pointer-events: none;
+    }
+    #prox-banner {
+      display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      background: #10b981; color: white; padding: 4px 14px;
+      border-radius: 999px; font-size: 12px; font-weight: 600; pointer-events: none;
+    }
+
+    /* ── Right Panel ── */
+    #panel {
+      width: 260px; background: #1e293b; border-left: 1px solid #334155;
+      display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto;
+    }
+    .panel-section { padding: 12px; border-bottom: 1px solid #0f172a; }
+    .sec-title {
+      font-size: 10px; font-weight: 700; color: #475569;
+      text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px;
+    }
+
+    /* ── Users ── */
+    .user-item {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 12px; padding: 4px 0; border-bottom: 1px solid #0f172a;
+    }
+    .udot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .uname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .badge {
+      font-size: 9px; padding: 1px 5px; border-radius: 999px;
+      font-weight: 700; background: #1e293b; color: #475569;
+    }
+    .badge.near   { background: #022c22; color: #10b981; }
+    .badge.rtc    { background: #1e1b4b; color: #818cf8; }
+
+    /* ── Curve Switcher ── */
+    #curve-buttons { display: flex; flex-direction: column; gap: 5px; }
+    .curve-btn {
+      display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+      border-radius: 6px; border: 1px solid #334155; background: #0f172a;
+      cursor: pointer; transition: all 0.15s; font-size: 11px; color: #94a3b8;
+    }
+    .curve-btn:hover { background: #1e293b; }
+    .curve-btn.active { border-color: currentColor; background: #0f172a; font-weight: 700; }
+    .curve-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .curve-desc { font-size: 9px; color: #475569; }
+
+    /* ── Attenuation Graph ── */
+    #atten-canvas { width: 100%; height: 80px; display: block; }
+
+    /* ── Audio Meters ── */
+    #meters { display: flex; flex-direction: column; gap: 5px; }
+    .meter-row { display: flex; align-items: center; gap: 6px; }
+    .mlabel { width: 52px; font-size: 10px; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mbar-bg { flex: 1; height: 5px; background: #0f172a; border-radius: 3px; overflow: hidden; }
+    .mbar { height: 100%; border-radius: 3px; transition: width 0.08s, background 0.3s; width: 0; }
+    .mdb { font-size: 9px; color: #475569; width: 32px; text-align: right; }
+
+    /* ── Metrics ── */
+    #metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .metric-card {
+      background: #0f172a; border-radius: 6px; padding: 8px; text-align: center;
+    }
+    .metric-val { font-size: 20px; font-weight: 700; color: #a5b4fc; }
+    .metric-label { font-size: 9px; color: #475569; margin-top: 2px; }
+    #redis-status { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; }
+
+    /* ── Log ── */
+    #log {
+      background: #0f172a; border-radius: 5px; padding: 6px;
+      height: 110px; overflow-y: auto; font-size: 10px; font-family: monospace; color: #475569;
+    }
+    .le { margin-bottom: 1px; }
+    .lg { color: #10b981; } .ly { color: #f59e0b; }
+    .lr { color: #ef4444; } .lb { color: #60a5fa; }
+    .lp { color: #c084fc; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="dot" id="conn-dot"></div>
+  <h1>🎙️ ProxiSpeak</h1>
+  <span id="status-text">Disconnected</span>
+  <span id="instance-badge">no instance</span>
+  <button class="hbtn" id="mic-btn" onclick="toggleMic()">🎤 Mic OFF</button>
+</header>
+
+<!-- Join -->
+<div id="join-screen">
+  <h2>Enter the virtual office</h2>
+  <p>Week 3: Redis-scaled signaling + dynamic audio attenuation curves</p>
+  <input id="name-input" type="text" placeholder="Your name..." maxlength="20" autofocus />
+  <button onclick="joinSpace()">Join Space</button>
+</div>
+
+<!-- Game -->
+<div id="game-screen">
+  <div id="canvas-wrap">
+    <canvas id="world"></canvas>
+    <div id="prox-banner">🔊 In earshot!</div>
+    <div id="move-hint">Click / Arrow Keys / WASD to move</div>
+  </div>
+
+  <div id="panel">
+
+    <!-- Users -->
+    <div class="panel-section">
+      <div class="sec-title">👥 Users Online</div>
+      <div id="user-list"></div>
+    </div>
+
+    <!-- Curve Switcher -->
+    <div class="panel-section">
+      <div class="sec-title">🎛 Attenuation Curve</div>
+      <div id="curve-buttons"></div>
+    </div>
+
+    <!-- Attenuation Graph -->
+    <div class="panel-section">
+      <div class="sec-title">📈 Volume vs Distance</div>
+      <canvas id="atten-canvas" height="80"></canvas>
+    </div>
+
+    <!-- Audio Meters -->
+    <div class="panel-section">
+      <div class="sec-title">🔊 Live Audio Levels</div>
+      <div id="meters"><span style="font-size:10px;color:#334155">No nearby users</span></div>
+    </div>
+
+    <!-- Server Metrics -->
+    <div class="panel-section">
+      <div class="sec-title">📊 Server Metrics</div>
+      <div id="metrics-grid">
+        <div class="metric-card"><div class="metric-val" id="m-users">0</div><div class="metric-label">Online</div></div>
+        <div class="metric-card"><div class="metric-val" id="m-nearby">0</div><div class="metric-label">In Earshot</div></div>
+        <div class="metric-card"><div class="metric-val" id="m-rtc">0</div><div class="metric-label">RTC Peers</div></div>
+        <div class="metric-card"><div class="metric-val" id="m-mesh">0</div><div class="metric-label">Max Mesh</div></div>
+      </div>
+      <div id="redis-status">
+        <div class="dot" id="redis-dot"></div>
+        <span id="redis-text" style="color:#475569">Redis: checking…</span>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="panel-section" style="flex:1">
+      <div class="sec-title">📋 Event Log</div>
+      <div id="log"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+//  ATTENUATION ENGINE  (inlined — no build tool needed for test client)
+// ════════════════════════════════════════════════════════════════════════════
+const CURVES = {
+  linear:         { label: 'Linear',       color: '#60a5fa', desc: 'Slow, even fade',           fn: t => 1 - t                                                  },
+  quadratic:      { label: 'Quadratic',    color: '#10b981', desc: 'Natural office (default)',   fn: t => (1 - t) ** 2                                            },
+  cubic:          { label: 'Cubic',        color: '#f59e0b', desc: 'Close / intimate rooms',     fn: t => (1 - t) ** 3                                            },
+  inverse_square: { label: 'Inv. Square',  color: '#ef4444', desc: 'Real-world physics',         fn: t => 1 / (1 + (t * 4) ** 2)                                  },
+  logarithmic:    { label: 'Logarithmic',  color: '#c084fc', desc: 'How ears hear loudness',     fn: t => t < 1 ? Math.max(0, 1 + Math.log10(1 - t * 0.99) / 2) : 0 }
+};
+
+let activeCurve  = 'quadratic';
+const EARSHOT    = 100;
+const SOFT_ZONE  = 10;
+
+function calculateGain(distance) {
+  if (distance <= SOFT_ZONE)  return 1.0;
+  if (distance >= EARSHOT)    return 0.0;
+  const t  = (distance - SOFT_ZONE) / (EARSHOT - SOFT_ZONE);
+  const fn = CURVES[activeCurve].fn;
+  return Math.max(0, Math.min(1, fn(t)));
+}
+
+function calculatePan(myX, theirX) {
+  return Math.max(-1, Math.min(1, (theirX - myX) / (EARSHOT * 0.8)));
+}
+
+function toDb(gain) {
+  return gain <= 0 ? -Infinity : 20 * Math.log10(gain);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CONFIG / STATE
+// ════════════════════════════════════════════════════════════════════════════
+// Auto-detect server URL from the page origin.
+// Works for localhost AND when accessed via 192.168.x.x:3001 from another PC.
+const SERVER     = window.location.origin;const AVATAR_R   = 18;
+const MOVE_SPEED = 4;
+const THROTTLE   = 50;
+const COLORS     = ['#4F46E5','#EF4444','#10B981','#F59E0B','#EC4899','#06B6D4','#8B5CF6','#F97316'];
+const ICE_CFG    = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+let socket, myId, myColor, myName;
+let myX = 450, myY = 300;
+let users        = {};
+let nearbyIds    = [];
+let peerConns    = {};
+let localStream  = null;
+let audioCtx     = null;
+let audioPeers   = {};    // peerId → { source, gain, panner, analyser }
+let micEnabled   = false;
+let keysDown     = {};
+let lastEmit     = 0;
+let frameCount   = 0;
+
+// ════════════════════════════════════════════════════════════════════════════
+//  DOM
+// ════════════════════════════════════════════════════════════════════════════
+const canvas      = document.getElementById('world');
+const ctx         = canvas.getContext('2d');
+const attenCanvas = document.getElementById('atten-canvas');
+const attenCtx    = attenCanvas.getContext('2d');
+const joinScr     = document.getElementById('join-screen');
+const gameScr     = document.getElementById('game-screen');
+const nameInput   = document.getElementById('name-input');
+const connDot     = document.getElementById('conn-dot');
+const statusTxt   = document.getElementById('status-text');
+const proxBanner  = document.getElementById('prox-banner');
+const micBtn      = document.getElementById('mic-btn');
+
+// ════════════════════════════════════════════════════════════════════════════
+//  LOGGING
+// ════════════════════════════════════════════════════════════════════════════
+function log(msg, cls = '') {
+  const el = document.createElement('div');
+  el.className = 'le ' + cls;
+  el.textContent = `[${new Date().toLocaleTimeString('en',{hour12:false})}] ${msg}`;
+  const l = document.getElementById('log');
+  l.appendChild(el);
+  l.scrollTop = l.scrollHeight;
+  while (l.children.length > 120) l.removeChild(l.firstChild);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CURVE SWITCHER UI
+// ════════════════════════════════════════════════════════════════════════════
+function buildCurveUI() {
+  const wrap = document.getElementById('curve-buttons');
+  Object.entries(CURVES).forEach(([key, meta]) => {
+    const btn = document.createElement('div');
+    btn.className = 'curve-btn' + (key === activeCurve ? ' active' : '');
+    btn.style.color = meta.color;
+    btn.id = 'curve-' + key;
+    btn.innerHTML = `
+      <div class="curve-dot" style="background:${meta.color}"></div>
+      <div style="flex:1">
+        <div>${meta.label}</div>
+        <div class="curve-desc">${meta.desc}</div>
+      </div>`;
+    btn.onclick = () => switchCurve(key);
+    wrap.appendChild(btn);
+  });
+}
+
+function switchCurve(key) {
+  activeCurve = key;
+  // Update button states
+  document.querySelectorAll('.curve-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('curve-' + key)?.classList.add('active');
+  // Update audio peers
+  Object.keys(audioPeers).forEach(id => updateAudioPeer(id));
+  drawAttenuationGraph();
+  log(`🎛 Curve → ${CURVES[key].label}`, 'lb');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ATTENUATION GRAPH
+// ════════════════════════════════════════════════════════════════════════════
+function drawAttenuationGraph() {
+  const w  = attenCanvas.offsetWidth || 230;
+  const h  = 80;
+  attenCanvas.width  = w;
+  attenCanvas.height = h;
+  const ac = attenCtx;
+  const pad = { l: 22, r: 8, t: 6, b: 16 };
+  const gw  = w - pad.l - pad.r;
+  const gh  = h - pad.t - pad.b;
+
+  ac.clearRect(0, 0, w, h);
+
+  // Grid
+  ac.strokeStyle = '#1e293b'; ac.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + (i / 4) * gh;
+    ac.beginPath(); ac.moveTo(pad.l, y); ac.lineTo(pad.l + gw, y); ac.stroke();
+    ac.fillStyle = '#334155'; ac.font = '8px monospace'; ac.textAlign = 'right';
+    ac.fillText(`${100 - i * 25}%`, pad.l - 2, y + 3);
+  }
+  // x labels
+  ac.fillStyle = '#334155'; ac.font = '8px monospace'; ac.textAlign = 'center';
+  ac.fillText('0', pad.l, h - 2);
+  ac.fillText('50px', pad.l + gw / 2, h - 2);
+  ac.fillText('100px', pad.l + gw, h - 2);
+
+  // Draw all curves (faded) and active curve (bright)
+  Object.entries(CURVES).forEach(([key, meta]) => {
+    const isActive = key === activeCurve;
+    ac.beginPath();
+    for (let i = 0; i <= 60; i++) {
+      const dist = (i / 60) * EARSHOT;
+      let gain;
+      if (dist <= SOFT_ZONE) { gain = 1; }
+      else if (dist >= EARSHOT) { gain = 0; }
+      else {
+        const t = (dist - SOFT_ZONE) / (EARSHOT - SOFT_ZONE);
+        gain = Math.max(0, Math.min(1, meta.fn(t)));
+      }
+      const px = pad.l + (dist / EARSHOT) * gw;
+      const py = pad.t + (1 - gain) * gh;
+      i === 0 ? ac.moveTo(px, py) : ac.lineTo(px, py);
+    }
+    ac.strokeStyle = isActive ? meta.color : meta.color + '33';
+    ac.lineWidth   = isActive ? 2 : 1;
+    ac.stroke();
+  });
+
+  // Current distance marker (if near someone)
+  if (nearbyIds.length > 0 && users[nearbyIds[0]]) {
+    const u    = users[nearbyIds[0]];
+    const dist = Math.min(EARSHOT, Math.sqrt((u.x - myX) ** 2 + (u.y - myY) ** 2));
+    const gain = calculateGain(dist);
+    const px   = pad.l + (dist / EARSHOT) * gw;
+    const py   = pad.t + (1 - gain) * gh;
+    ac.beginPath();
+    ac.arc(px, py, 4, 0, Math.PI * 2);
+    ac.fillStyle = CURVES[activeCurve].color;
+    ac.fill();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  WEB AUDIO
+// ════════════════════════════════════════════════════════════════════════════
+function getAC() {
+  if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function addAudioPeer(peerId, stream) {
+  if (audioPeers[peerId]) removeAudioPeer(peerId);
+  const ac       = getAC();
+  const source   = ac.createMediaStreamSource(stream);
+  const gainNode = ac.createGain();
+  const panner   = ac.createStereoPanner();
+  const analyser = ac.createAnalyser();
+  analyser.fftSize = 256;
+
+  source.connect(gainNode);
+  gainNode.connect(panner);
+  panner.connect(analyser);
+  analyser.connect(ac.destination);
+
+  gainNode.gain.value = 1.0;
+  panner.pan.value    = 0;
+
+  audioPeers[peerId] = { source, gainNode, panner, analyser };
+  log(`🔊 Audio link: ${users[peerId]?.name || peerId.slice(0,6)}`, 'lp');
+}
+
+function updateAudioPeer(peerId) {
+  const ap = audioPeers[peerId];
+  const u  = users[peerId];
+  if (!ap || !u) return;
+  const dist = Math.sqrt((u.x - myX) ** 2 + (u.y - myY) ** 2);
+  const gain = calculateGain(dist);
+  const pan  = calculatePan(myX, u.x);
+  const t    = getAC().currentTime;
+  ap.gainNode.gain.setTargetAtTime(gain, t, 0.1);
+  ap.panner.pan.setTargetAtTime(pan, t, 0.1);
+}
+
+function removeAudioPeer(peerId) {
+  const ap = audioPeers[peerId];
+  if (!ap) return;
+  ap.gainNode.gain.setTargetAtTime(0, getAC().currentTime, 0.05);
+  setTimeout(() => {
+    try { ap.source.disconnect(); ap.gainNode.disconnect(); ap.panner.disconnect(); ap.analyser.disconnect(); } catch(_) {}
+  }, 200);
+  delete audioPeers[peerId];
+}
+
+function getPeerVolume(peerId) {
+  const ap = audioPeers[peerId];
+  if (!ap) return 0;
+  const buf = new Uint8Array(ap.analyser.fftSize);
+  ap.analyser.getByteTimeDomainData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+  return Math.sqrt(sum / buf.length);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  WEBRTC
+// ════════════════════════════════════════════════════════════════════════════
+function createPC(peerId) {
+  if (peerConns[peerId]) return peerConns[peerId];
+  const pc = new RTCPeerConnection(ICE_CFG);
+  if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  pc.ontrack = e => addAudioPeer(peerId, e.streams[0]);
+  pc.onicecandidate = e => {
+    if (e.candidate) socket.emit('webrtc:ice-candidate', { targetId: peerId, candidate: e.candidate });
+  };
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') closePC(peerId, false);
+  };
+  peerConns[peerId] = pc;
+  return pc;
+}
+
+async function callPeer(peerId) {
+  if (!socket || peerConns[peerId] || !localStream) return;
+  const pc = createPC(peerId);
+  try {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('webrtc:offer', { targetId: peerId, offer });
+    log(`📞 Calling ${users[peerId]?.name || peerId.slice(0,6)}`, 'lb');
+  } catch (e) { log('❌ Offer: ' + e.message, 'lr'); }
+}
+
+function closePC(peerId, sendHangup = true) {
+  const pc = peerConns[peerId];
+  if (pc) { try { pc.close(); } catch(_) {} delete peerConns[peerId]; }
+  removeAudioPeer(peerId);
+  if (sendHangup && socket) socket.emit('webrtc:hangup', { targetId: peerId });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MIC TOGGLE
+// ════════════════════════════════════════════════════════════════════════════
+async function toggleMic() {
+  if (micEnabled) {
+    localStream?.getTracks().forEach(t => t.stop());
+    localStream = null; micEnabled = false;
+    micBtn.textContent = '🎤 Mic OFF'; micBtn.classList.remove('active');
+    log('Mic disabled', 'ly'); return;
+  }
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true }, video: false
+    });
+    micEnabled = true;
+    micBtn.textContent = '🔴 Mic ON'; micBtn.classList.add('active');
+    getAC(); // init AudioContext on user gesture
+    Object.entries(peerConns).forEach(([id, pc]) => {
+      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+    });
+    log('🎤 Mic enabled', 'lg');
+  } catch (e) {
+    log('❌ Mic denied: ' + e.message, 'lr');
+    alert('Microphone access denied. Please allow mic and try again.');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SOCKET.IO
+// ════════════════════════════════════════════════════════════════════════════
+function joinSpace() {
+  myName = nameInput.value.trim() || 'Anonymous';
+  socket = io(SERVER, {
+    transports: ['websocket', 'polling'],  // Try WebSocket first, fall back to polling
+    extraHeaders: { 'ngrok-skip-browser-warning': 'true' }  // Skip ngrok interstitial
+  });
+
+  socket.on('connect', () => {
+    connDot.classList.add('on');
+    statusTxt.textContent = `Connected · ${myName}`;
+    socket.emit('join', { name: myName, x: myX, y: myY });
+    joinScr.style.display = 'none';
+    gameScr.style.display = 'flex';
+    resizeCanvas();
+    buildCurveUI();
+    drawAttenuationGraph();
+    startLoop();
+    fetchMetrics();
+    setInterval(fetchMetrics, 5000);
+    log('Connected to ProxiSpeak server', 'lg');
+  });
+
+  socket.on('disconnect', () => {
+    connDot.classList.remove('on');
+    statusTxt.textContent = 'Disconnected';
+    log('Disconnected', 'lr');
+  });
+
+  socket.on('self:joined', ({ id, color }) => {
+    myId = id; myColor = color;
+    log(`Joined as "${myName}" · ID: ${id.slice(0,8)}`, 'lg');
+  });
+
+  socket.on('users:update', (all) => {
+    users = {};
+    all.forEach(u => { users[u.id] = u; });
+    renderUsers();
+    updateMetrics();
+  });
+
+  socket.on('user:moved', ({ id, x, y }) => {
+    if (users[id]) { users[id].x = x; users[id].y = y; }
+    if (audioPeers[id]) updateAudioPeer(id);
+  });
+
+  socket.on('user:left', ({ id }) => {
+    if (users[id]) log(`${users[id].name} left`, 'ly');
+    closePC(id, false);
+    delete users[id];
+    renderUsers();
+  });
+
+  socket.on('proximity:update', ({ nearbyIds: ids, source }) => {
+    nearbyIds = ids;
+    const n = ids.length;
+    proxBanner.style.display = n > 0 ? 'block' : 'none';
+    proxBanner.textContent   = n > 0 ? `🔊 ${n} in earshot · via ${source||'?'}` : '';
+    renderUsers();
+    renderMeters();
+    drawAttenuationGraph(); // redraw to move distance marker
+  });
+
+  socket.on('proximity:enter', ({ ids }) => {
+    ids.forEach(id => {
+      log(`🚶 ${users[id]?.name||id.slice(0,6)} entered earshot`, 'lg');
+      if (micEnabled) callPeer(id);
+    });
+  });
+
+  socket.on('proximity:leave', ({ ids }) => {
+    ids.forEach(id => {
+      log(`🚶 ${users[id]?.name||id.slice(0,6)} left earshot`, 'ly');
+      closePC(id);
+    });
+  });
+
+  // WebRTC signaling
+  socket.on('webrtc:offer', async ({ fromId, offer }) => {
+    if (!localStream) { log('⚠ Offer received — enable mic first', 'ly'); return; }
+    const pc = createPC(fromId);
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const ans = await pc.createAnswer();
+      await pc.setLocalDescription(ans);
+      socket.emit('webrtc:answer', { targetId: fromId, answer: ans });
+      log(`✅ Answered ${users[fromId]?.name||fromId.slice(0,6)}`, 'lg');
+    } catch(e) { log('❌ Answer: ' + e.message, 'lr'); }
+  });
+
+  socket.on('webrtc:answer', async ({ fromId, answer }) => {
+    const pc = peerConns[fromId];
+    if (pc) { try { await pc.setRemoteDescription(new RTCSessionDescription(answer)); log(`🔗 RTC with ${users[fromId]?.name||fromId.slice(0,6)}`, 'lp'); } catch(e) {} }
+  });
+
+  socket.on('webrtc:ice-candidate', async ({ fromId, candidate }) => {
+    const pc = peerConns[fromId];
+    if (pc) { try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(_) {} }
+  });
+
+  socket.on('webrtc:hangup', ({ fromId }) => {
+    closePC(fromId, false);
+    log(`📴 ${users[fromId]?.name||fromId.slice(0,6)} hung up`, 'ly');
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  METRICS (polls /health and /api/metrics)
+// ════════════════════════════════════════════════════════════════════════════
+async function fetchMetrics() {
+  try {
+    const [healthRes, metricsRes] = await Promise.all([
+      fetch('/health'), fetch('/api/metrics')
+    ]);
+    const health  = await healthRes.json();
+    const metrics = await metricsRes.json();
+
+    // Instance badge
+    if (health.instanceId) {
+      document.getElementById('instance-badge').textContent = health.instanceId.split('-').slice(-1)[0];
+    }
+
+    // Redis status
+    const rDot  = document.getElementById('redis-dot');
+    const rText = document.getElementById('redis-text');
+    if (health.redis?.status === 'connected') {
+      rDot.classList.add('on');
+      rText.textContent = `Redis: connected (${health.redis.connectedClients} clients)`;
+      rText.style.color = '#10b981';
+    } else {
+      rDot.classList.remove('on');
+      rText.textContent = 'Redis: offline (single-instance mode)';
+      rText.style.color = '#ef4444';
+    }
+    updateMetrics();
+  } catch (_) {}
+}
+
+function updateMetrics() {
+  const total   = Object.keys(users).length;
+  const rtcN    = Object.keys(peerConns).length;
+  const meshMax = total > 1 ? Math.round(total * (total - 1) / 2) : 0;
+  document.getElementById('m-users').textContent  = total;
+  document.getElementById('m-nearby').textContent = nearbyIds.length;
+  document.getElementById('m-rtc').textContent    = rtcN;
+  document.getElementById('m-mesh').textContent   = meshMax;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  INPUT
+// ════════════════════════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  keysDown[e.key] = true;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keysDown[e.key] = false; });
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinSpace(); e.stopPropagation(); });
+canvas.addEventListener('click', e => {
+  const r = canvas.getBoundingClientRect();
+  myX = e.clientX - r.left;
+  myY = e.clientY - r.top;
+  emitMove();
+});
+
+function emitMove() {
+  if (!socket || !myId) return;
+  const now = Date.now();
+  if (now - lastEmit < THROTTLE) return;
+  lastEmit = now;
+  socket.emit('move', { x: Math.round(myX), y: Math.round(myY) });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  GAME LOOP
+// ════════════════════════════════════════════════════════════════════════════
+function startLoop() {
+  function loop() {
+    let moved = false;
+    if (keysDown['ArrowUp']   ||keysDown['w']||keysDown['W']) { myY -= MOVE_SPEED; moved = true; }
+    if (keysDown['ArrowDown'] ||keysDown['s']||keysDown['S']) { myY += MOVE_SPEED; moved = true; }
+    if (keysDown['ArrowLeft'] ||keysDown['a']||keysDown['A']) { myX -= MOVE_SPEED; moved = true; }
+    if (keysDown['ArrowRight']||keysDown['d']||keysDown['D']) { myX += MOVE_SPEED; moved = true; }
+    myX = Math.max(AVATAR_R, Math.min(canvas.width  - AVATAR_R, myX));
+    myY = Math.max(AVATAR_R, Math.min(canvas.height - AVATAR_R, myY));
+    if (moved) { emitMove(); if (users[myId]) { users[myId].x = myX; users[myId].y = myY; } }
+
+    frameCount++;
+    if (frameCount % 3 === 0) {
+      nearbyIds.forEach(id => updateAudioPeer(id));
+      updateMeterBars();
+      if (frameCount % 30 === 0) drawAttenuationGraph(); // redraw marker ~2/s
+    }
+
+    render();
+    requestAnimationFrame(loop);
+  }
+  loop();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  RENDER
+// ════════════════════════════════════════════════════════════════════════════
+function resizeCanvas() {
+  const w = document.getElementById('canvas-wrap');
+  canvas.width = w.clientWidth; canvas.height = w.clientHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+
+function render() {
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  drawGrid(w, h);
+
+  // Earshot ring
+  if (myId) {
+    ctx.beginPath(); ctx.arc(myX, myY, EARSHOT, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(79,70,229,0.25)'; ctx.lineWidth = 1.5;
+    ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(79,70,229,0.05)'; ctx.fill();
+  }
+
+  // Connection lines
+  nearbyIds.forEach(id => {
+    const u = users[id]; if (!u) return;
+    const dist    = Math.sqrt((u.x-myX)**2 + (u.y-myY)**2);
+    const gain    = calculateGain(dist);
+    const isRTC   = !!peerConns[id];
+    const color   = isRTC ? CURVES[activeCurve].color : '#10b981';
+    ctx.beginPath(); ctx.moveTo(myX, myY); ctx.lineTo(u.x, u.y);
+    ctx.strokeStyle = color + Math.round(gain * 255).toString(16).padStart(2,'0');
+    ctx.lineWidth   = isRTC ? 2 : 1; ctx.stroke();
+
+    // dB label on line
+    if (isRTC) {
+      const db  = toDb(gain);
+      const mx  = (myX + u.x) / 2;
+      const my2 = (myY + u.y) / 2 - 12;
+      const lbl = isFinite(db) ? `${db.toFixed(1)}dB` : '–∞dB';
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(mx - 22, my2 - 7, 44, 14);
+      ctx.fillStyle = CURVES[activeCurve].color;
+      ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(lbl, mx, my2);
+    }
+  });
+
+  Object.values(users).forEach(u => drawAvatar(u));
+}
+
+function drawGrid(w, h) {
+  ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+  for (let x = 0; x <= w; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+  for (let y = 0; y <= h; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+}
+
+function drawAvatar(u) {
+  const isMe     = u.id === myId;
+  const isNearby = nearbyIds.includes(u.id);
+  const isRTC    = !!peerConns[u.id];
+  const c        = u.color || '#4F46E5';
+
+  if (isRTC)    { ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R+8,0,Math.PI*2); ctx.fillStyle='rgba(99,102,241,0.15)'; ctx.fill(); }
+  else if (isNearby){ ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R+5,0,Math.PI*2); ctx.fillStyle='rgba(16,185,129,0.12)'; ctx.fill(); }
+
+  ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R,0,Math.PI*2); ctx.fillStyle=c; ctx.fill();
+  if (isMe) { ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R+3,0,Math.PI*2); ctx.strokeStyle='white'; ctx.lineWidth=2; ctx.stroke(); }
+
+  ctx.fillStyle='white'; ctx.font=`bold ${AVATAR_R}px Segoe UI`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText((u.name||'?')[0].toUpperCase(), u.x, u.y);
+  ctx.fillStyle=isMe?'white':'#94a3b8'; ctx.font=isMe?'bold 11px Segoe UI':'11px Segoe UI';
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText(u.name+(isMe?' (you)':''), u.x, u.y+AVATAR_R+4);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SIDEBAR UI
+// ════════════════════════════════════════════════════════════════════════════
+function renderUsers() {
+  const ul = document.getElementById('user-list');
+  ul.innerHTML = '';
+  Object.values(users).forEach(u => {
+    const isMe = u.id === myId, isNear = nearbyIds.includes(u.id), isRTC = !!peerConns[u.id];
+    const div = document.createElement('div');
+    div.className = 'user-item';
+    div.innerHTML = `
+      <div class="udot" style="background:${u.color||'#4F46E5'}"></div>
+      <span class="uname">${u.name}${isMe?' (you)':''}</span>
+      ${isRTC  ? '<span class="badge rtc">🔗 RTC</span>'  : ''}
+      ${isNear && !isRTC ? '<span class="badge near">🔊</span>' : ''}`;
+    ul.appendChild(div);
+  });
+}
+
+function renderMeters() {
+  const el = document.getElementById('meters');
+  if (nearbyIds.length === 0) { el.innerHTML = '<span style="font-size:10px;color:#334155">No nearby users</span>'; return; }
+  el.innerHTML = '';
+  nearbyIds.forEach(id => {
+    const u = users[id]; if (!u) return;
+    const dist = Math.sqrt((u.x-myX)**2 + (u.y-myY)**2);
+    const gain = calculateGain(dist);
+    const pct  = Math.round(gain * 100);
+    const db   = toDb(gain);
+    const dbStr= isFinite(db) ? db.toFixed(1)+'dB' : '–∞';
+    el.innerHTML += `
+      <div class="meter-row">
+        <span class="mlabel">${u.name}</span>
+        <div class="mbar-bg"><div class="mbar" id="mb-${id}" style="width:${pct}%;background:${pct>60?'#10b981':pct>30?'#f59e0b':'#60a5fa'}"></div></div>
+        <span class="mdb">${dbStr}</span>
+      </div>`;
+  });
+}
+
+function updateMeterBars() {
+  nearbyIds.forEach(id => {
+    const u = users[id]; if (!u) return;
+    const dist = Math.sqrt((u.x-myX)**2 + (u.y-myY)**2);
+    const gain = calculateGain(dist);
+    const pct  = Math.round(gain * 100);
+    const db   = toDb(gain);
+    const bar  = document.getElementById('mb-'+id);
+    const dbEl = bar?.parentElement?.parentElement?.querySelector('.mdb');
+    if (bar)  { bar.style.width=pct+'%'; bar.style.background=pct>60?'#10b981':pct>30?'#f59e0b':'#60a5fa'; }
+    if (dbEl) dbEl.textContent = isFinite(db) ? db.toFixed(1)+'dB' : '–∞';
+  });
+}
+</script>
+</body>
+</html>
