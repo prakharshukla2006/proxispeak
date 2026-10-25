@@ -148,10 +148,11 @@
 
 <!-- Join -->
 <div id="join-screen">
-  <h2>Enter the virtual office</h2>
-  <p>Week 3: Redis-scaled signaling + dynamic audio attenuation curves</p>
-  <input id="name-input" type="text" placeholder="Your name..." maxlength="20" autofocus />
+  <h2>🎙️ ProxiSpeak — Virtual Office</h2>
+  <p>Real-time proximity audio — move close to others to hear them</p>
+  <input id="name-input" type="text" placeholder="Enter your name..." maxlength="20" autofocus />
   <button onclick="joinSpace()">Join Space</button>
+  <p id="join-status" style="font-size:12px;color:#64748b;min-height:18px;margin-top:4px;"></p>
 </div>
 
 <!-- Game -->
@@ -521,22 +522,36 @@ async function toggleMic() {
 // ════════════════════════════════════════════════════════════════════════════
 //  SOCKET.IO
 // ════════════════════════════════════════════════════════════════════════════
-function joinSpace() {
+async function joinSpace() {
   if (socket && socket.connected) return; // prevent double-join
   myName = nameInput.value.trim() || 'Anonymous';
 
-  // Show connecting state
   const joinBtn = document.querySelector('#join-screen button');
-  joinBtn.textContent = 'Connecting...';
+
+  // Step 1: Wake the Render server (free tier sleeps after inactivity)
+  joinBtn.textContent = '⏳ Waking server...';
   joinBtn.disabled = true;
+  statusTxt.textContent = 'Pinging server — this takes up to 30s on first load...';
+  const joinStatus = document.getElementById('join-status');
+  if (joinStatus) joinStatus.textContent = '⏳ Waking server up... (first load may take 30s)';
+
+  try {
+    await fetch(SERVER + '/health', { method: 'GET', cache: 'no-cache' });
+  } catch (e) { /* server may be sleeping — socket will retry */ }
+
+  // Step 2: Connect socket
+  joinBtn.textContent = '🔌 Connecting...';
+  statusTxt.textContent = 'Connecting...';
+
+  if (socket) { socket.disconnect(); socket = null; }
 
   socket = io(SERVER, {
     transports: ['polling', 'websocket'],
     upgrade: true,
     reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000,
-    timeout: 20000,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 2000,
+    timeout: 60000,   // 60s — enough for Render cold start
     extraHeaders: { 'ngrok-skip-browser-warning': 'true' }
   });
 
@@ -552,23 +567,22 @@ function joinSpace() {
     startLoop();
     fetchMetrics();
     setInterval(fetchMetrics, 5000);
-    log('Connected to ProxiSpeak server', 'lg');
+    log('Connected to ProxiSpeak server ✅', 'lg');
   });
 
   socket.on('disconnect', () => {
     connDot.classList.remove('on');
     statusTxt.textContent = 'Disconnected — retrying...';
-    log('Disconnected', 'lr');
+    log('Disconnected from server', 'lr');
   });
 
   socket.on('connect_error', (err) => {
     connDot.classList.remove('on');
-    statusTxt.textContent = `Connection error: ${err.message}`;
+    statusTxt.textContent = `❌ Error: ${err.message} — click Join to retry`;
     log(`Connection error: ${err.message}`, 'lr');
     console.error('Socket connect_error:', err);
-    // Reset join button so user can retry
-    const joinBtn = document.querySelector('#join-screen button');
-    if (joinBtn) { joinBtn.textContent = 'Join Space'; joinBtn.disabled = false; }
+    joinBtn.textContent = 'Join Space';
+    joinBtn.disabled = false;
     joinScr.style.display = 'flex';
     gameScr.style.display = 'none';
     socket.disconnect();
