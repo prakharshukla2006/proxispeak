@@ -26,13 +26,17 @@ const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, {
   cors: {
-    origin: '*',             // Allow ngrok URLs, localhost, any origin
+    origin: '*',
     methods: ['GET', 'POST'],
     credentials: false
   },
-  // Fix for ngrok — allow all transports
-  transports: ['websocket', 'polling'],
-  allowEIO3: true
+  // Render.com: start with polling (always works), upgrade to websocket
+  transports: ['polling', 'websocket'],
+  allowEIO3: true,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  upgradeTimeout: 30000,
+  allowUpgrades: true
 });
 
 app.use(cors());

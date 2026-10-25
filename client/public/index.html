@@ -524,8 +524,13 @@ async function toggleMic() {
 function joinSpace() {
   myName = nameInput.value.trim() || 'Anonymous';
   socket = io(SERVER, {
-    transports: ['websocket', 'polling'],  // Try WebSocket first, fall back to polling
-    extraHeaders: { 'ngrok-skip-browser-warning': 'true' }  // Skip ngrok interstitial
+    transports: ['polling', 'websocket'],  // polling first (always works on Render), then upgrade
+    upgrade: true,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+    timeout: 20000,
+    extraHeaders: { 'ngrok-skip-browser-warning': 'true' }
   });
 
   socket.on('connect', () => {
@@ -545,8 +550,15 @@ function joinSpace() {
 
   socket.on('disconnect', () => {
     connDot.classList.remove('on');
-    statusTxt.textContent = 'Disconnected';
+    statusTxt.textContent = 'Disconnected — retrying...';
     log('Disconnected', 'lr');
+  });
+
+  socket.on('connect_error', (err) => {
+    connDot.classList.remove('on');
+    statusTxt.textContent = `Connection error: ${err.message}`;
+    log(`Connection error: ${err.message}`, 'lr');
+    console.error('Socket connect_error:', err);
   });
 
   socket.on('self:joined', ({ id, color }) => {
