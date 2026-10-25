@@ -522,9 +522,16 @@ async function toggleMic() {
 //  SOCKET.IO
 // ════════════════════════════════════════════════════════════════════════════
 function joinSpace() {
+  if (socket && socket.connected) return; // prevent double-join
   myName = nameInput.value.trim() || 'Anonymous';
+
+  // Show connecting state
+  const joinBtn = document.querySelector('#join-screen button');
+  joinBtn.textContent = 'Connecting...';
+  joinBtn.disabled = true;
+
   socket = io(SERVER, {
-    transports: ['polling', 'websocket'],  // polling first (always works on Render), then upgrade
+    transports: ['polling', 'websocket'],
     upgrade: true,
     reconnection: true,
     reconnectionAttempts: 10,
@@ -559,6 +566,13 @@ function joinSpace() {
     statusTxt.textContent = `Connection error: ${err.message}`;
     log(`Connection error: ${err.message}`, 'lr');
     console.error('Socket connect_error:', err);
+    // Reset join button so user can retry
+    const joinBtn = document.querySelector('#join-screen button');
+    if (joinBtn) { joinBtn.textContent = 'Join Space'; joinBtn.disabled = false; }
+    joinScr.style.display = 'flex';
+    gameScr.style.display = 'none';
+    socket.disconnect();
+    socket = null;
   });
 
   socket.on('self:joined', ({ id, color }) => {
