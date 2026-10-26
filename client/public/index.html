@@ -3,48 +3,64 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ProxiSpeak — Week 3</title>
+  <title>ProxiSpeak — Week 4</title>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column;height:100vh;overflow:hidden;}
 
-    /* ── Header ── */
+    /* Header */
     header{display:flex;align-items:center;gap:10px;padding:8px 16px;background:#1e293b;border-bottom:1px solid #334155;flex-shrink:0;}
     header h1{font-size:15px;font-weight:700;color:#a5b4fc;}
     .dot{width:9px;height:9px;border-radius:50%;background:#ef4444;transition:background .3s;}
     .dot.on{background:#10b981;}
     #status-text{font-size:12px;color:#64748b;flex:1;}
+    #room-badge{font-size:10px;padding:2px 8px;border-radius:999px;background:#1e1b4b;color:#818cf8;border:1px solid #312e81;display:none;}
     .hbtn{padding:4px 12px;border-radius:5px;font-size:12px;cursor:pointer;border:1px solid #334155;background:#1e293b;color:#cbd5e1;transition:all .2s;}
     .hbtn:hover{background:#334155;}
     .hbtn.active{background:#10b981;border-color:#10b981;color:#fff;}
+    #leave-btn{display:none;background:#1e293b;color:#ef4444;border-color:#ef4444;}
+    #leave-btn:hover{background:#ef4444;color:white;}
 
-    /* ── Join ── */
-    #join-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:16px;}
-    #join-screen h2{font-size:26px;font-weight:700;color:#a5b4fc;}
-    #join-screen p{font-size:13px;color:#64748b;max-width:380px;text-align:center;line-height:1.6;}
-    #join-screen input{padding:10px 16px;border-radius:8px;border:1px solid #475569;background:#1e293b;color:white;font-size:15px;width:280px;outline:none;transition:border-color .2s;}
-    #join-screen input:focus{border-color:#4f46e5;}
-    #join-screen button{padding:12px 36px;background:#4f46e5;color:white;border:none;border-radius:8px;font-size:15px;cursor:pointer;transition:background .2s;font-weight:600;}
-    #join-screen button:hover:not(:disabled){background:#4338ca;}
-    #join-screen button:disabled{background:#334155;cursor:not-allowed;}
-    #join-msg{font-size:12px;color:#64748b;min-height:20px;}
+    /* Join Screen */
+    #join-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:0;}
+    .join-card{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:32px;width:420px;display:flex;flex-direction:column;gap:16px;}
+    .join-card h2{font-size:22px;font-weight:700;color:#a5b4fc;text-align:center;}
+    .join-card p{font-size:12px;color:#64748b;text-align:center;line-height:1.6;}
+    .field-label{font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+    .field-input{width:100%;padding:10px 14px;border-radius:8px;border:1px solid #475569;background:#0f172a;color:white;font-size:14px;outline:none;transition:border-color .2s;}
+    .field-input:focus{border-color:#4f46e5;}
+    #join-btn{width:100%;padding:12px;background:#4f46e5;color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:background .2s;}
+    #join-btn:hover:not(:disabled){background:#4338ca;}
+    #join-btn:disabled{background:#334155;cursor:not-allowed;}
+    #join-msg{font-size:12px;color:#64748b;text-align:center;min-height:18px;}
 
-    /* ── Game ── */
+    /* Room List */
+    #room-list-wrap{margin-top:4px;}
+    #room-list-title{font-size:10px;color:#475569;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
+    #room-list{display:flex;flex-wrap:wrap;gap:6px;}
+    .room-chip{padding:4px 12px;background:#0f172a;border:1px solid #334155;border-radius:999px;font-size:11px;color:#94a3b8;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;}
+    .room-chip:hover{border-color:#4f46e5;color:#a5b4fc;}
+    .room-chip .rc-count{font-size:9px;background:#1e1b4b;color:#818cf8;padding:1px 5px;border-radius:999px;}
+    #no-rooms{font-size:11px;color:#334155;font-style:italic;}
+
+    /* Game Screen */
     #game-screen{display:none;flex:1;flex-direction:row;overflow:hidden;min-height:0;}
 
-    /* ── Canvas ── */
+    /* Canvas */
     #canvas-wrap{flex:1;position:relative;overflow:hidden;}
     canvas{display:block;cursor:crosshair;}
     #move-hint{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:11px;color:#334155;pointer-events:none;}
     #prox-banner{display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#10b981;color:white;padding:4px 16px;border-radius:999px;font-size:12px;font-weight:600;pointer-events:none;}
+    #fps-counter{position:absolute;top:8px;right:8px;font-size:10px;color:#334155;font-family:monospace;pointer-events:none;}
 
-    /* ── Right Panel ── */
+    /* Right Panel */
     #panel{width:260px;background:#1e293b;border-left:1px solid #334155;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;}
     .panel-section{padding:12px;border-bottom:1px solid #0f172a;}
-    .sec-title{font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
+    .sec-title{font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
+    .sec-count{background:#0f172a;color:#64748b;border-radius:999px;padding:1px 6px;font-size:9px;}
 
-    /* ── Users ── */
+    /* Users */
     .user-item{display:flex;align-items:center;gap:7px;font-size:12px;padding:4px 0;border-bottom:1px solid #0f172a;}
     .udot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
     .uname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -52,7 +68,7 @@
     .badge.near{background:#022c22;color:#10b981;}
     .badge.rtc{background:#1e1b4b;color:#818cf8;}
 
-    /* ── Attenuation Curves ── */
+    /* Curves */
     #curve-buttons{display:flex;flex-direction:column;gap:4px;}
     .curve-btn{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;border:1px solid #334155;background:#0f172a;cursor:pointer;transition:all .15s;font-size:11px;color:#94a3b8;}
     .curve-btn:hover{background:#1e293b;}
@@ -60,10 +76,10 @@
     .cdot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
     .cdesc{font-size:9px;color:#475569;}
 
-    /* ── Graph ── */
+    /* Graph */
     #atten-canvas{width:100%;height:80px;display:block;border-radius:4px;background:#0f172a;}
 
-    /* ── dB Meters ── */
+    /* Meters */
     #meters{display:flex;flex-direction:column;gap:5px;}
     .meter-row{display:flex;align-items:center;gap:6px;font-size:11px;}
     .mlabel{width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#94a3b8;}
@@ -71,7 +87,7 @@
     .mbar{height:100%;border-radius:3px;transition:width .1s,background .1s;}
     .mdb{width:38px;text-align:right;font-size:10px;color:#64748b;font-family:monospace;}
 
-    /* ── Log ── */
+    /* Log */
     #log{flex:1;overflow-y:auto;padding:8px;font-size:10px;font-family:monospace;background:#0f172a;min-height:80px;}
     .le{padding:2px 0;border-bottom:1px solid #1e293b;color:#64748b;}
     .lg{color:#10b981;}.lr{color:#ef4444;}.ly{color:#f59e0b;}
@@ -82,75 +98,82 @@
 <header>
   <div class="dot" id="conn-dot"></div>
   <h1>🎙️ ProxiSpeak</h1>
+  <span id="room-badge"></span>
   <span id="status-text">Not connected</span>
   <button class="hbtn" id="mic-btn" onclick="toggleMic()">🎤 Mic OFF</button>
+  <button class="hbtn" id="leave-btn" onclick="leaveRoom()">🚪 Leave</button>
 </header>
 
-<!-- Join -->
+<!-- Join Screen -->
 <div id="join-screen">
-  <h2>🎙️ ProxiSpeak</h2>
-  <p>Week 3 · Proximity Audio · Move your avatar close to others to start a voice call automatically</p>
-  <input id="name-input" type="text" placeholder="Enter your name..." maxlength="20" autofocus/>
-  <button id="join-btn" onclick="joinSpace()">Join Space</button>
-  <span id="join-msg"></span>
+  <div class="join-card">
+    <h2>🎙️ ProxiSpeak</h2>
+    <p>Week 4 · Named Rooms · 60 FPS · Proximity Audio</p>
+
+    <div>
+      <div class="field-label">Your Name</div>
+      <input class="field-input" id="name-input" type="text" placeholder="Enter your name..." maxlength="20" autofocus/>
+    </div>
+
+    <div>
+      <div class="field-label">Room</div>
+      <input class="field-input" id="room-input" type="text" placeholder="Room name (e.g. Design, Dev, General)" maxlength="30"/>
+    </div>
+
+    <div id="room-list-wrap">
+      <div id="room-list-title">Active Rooms</div>
+      <div id="room-list"><span id="no-rooms">Loading rooms...</span></div>
+    </div>
+
+    <button id="join-btn" onclick="joinSpace()">Join Space</button>
+    <span id="join-msg"></span>
+  </div>
 </div>
 
-<!-- Game -->
+<!-- Game Screen -->
 <div id="game-screen">
   <div id="canvas-wrap">
     <canvas id="world"></canvas>
     <div id="prox-banner">🔊 In earshot!</div>
     <div id="move-hint">Click to move · Arrow Keys / WASD</div>
+    <div id="fps-counter">-- FPS</div>
   </div>
 
   <div id="panel">
-    <!-- Users -->
     <div class="panel-section">
-      <div class="sec-title">👥 Online</div>
+      <div class="sec-title">👥 Users <span class="sec-count" id="user-count">0</span></div>
       <div id="user-list"></div>
     </div>
-
-    <!-- Attenuation Curves -->
     <div class="panel-section">
       <div class="sec-title">📉 Attenuation Curve</div>
       <div id="curve-buttons"></div>
     </div>
-
-    <!-- Graph -->
     <div class="panel-section">
       <div class="sec-title">📊 Volume vs Distance</div>
       <canvas id="atten-canvas"></canvas>
     </div>
-
-    <!-- dB Meters -->
     <div class="panel-section">
       <div class="sec-title">🔊 Volume Meters</div>
       <div id="meters"><span style="font-size:10px;color:#334155">No nearby users</span></div>
     </div>
-
-    <!-- Log -->
     <div id="log"></div>
   </div>
 </div>
 
 <script>
 // ══════════════════════════════════════════════════════════════════
-//  ATTENUATION ENGINE  (Week 3)
+//  ATTENUATION ENGINE (Week 3)
 // ══════════════════════════════════════════════════════════════════
 const CURVES = {
-  linear:       { label:'Linear',       color:'#4f46e5', desc:'Volume drops evenly',       fn: r => Math.max(0, 1 - r) },
-  quadratic:    { label:'Quadratic',    color:'#10b981', desc:'Faster initial drop',        fn: r => Math.max(0, (1-r)**2) },
-  cubic:        { label:'Cubic',        color:'#f59e0b', desc:'Very steep at close range',  fn: r => Math.max(0, (1-r)**3) },
-  inverse_sq:   { label:'Inverse Sq.',  color:'#ec4899', desc:'Physics-accurate (1/d²)',    fn: r => r < .01 ? 1 : Math.min(1, 1/(r*r*10+1)) },
-  logarithmic:  { label:'Logarithmic',  color:'#06b6d4', desc:'Gentle fade over distance', fn: r => Math.max(0, 1 - Math.log(1 + r*9)/Math.log(10)) }
+  linear:      { label:'Linear',      color:'#4f46e5', desc:'Volume drops evenly',       fn: r => Math.max(0, 1-r) },
+  quadratic:   { label:'Quadratic',   color:'#10b981', desc:'Faster initial drop',        fn: r => Math.max(0,(1-r)**2) },
+  cubic:       { label:'Cubic',       color:'#f59e0b', desc:'Very steep at close range',  fn: r => Math.max(0,(1-r)**3) },
+  inverse_sq:  { label:'Inverse Sq.', color:'#ec4899', desc:'Physics-accurate (1/d²)',    fn: r => r<.01?1:Math.min(1,1/(r*r*10+1)) },
+  logarithmic: { label:'Logarithmic', color:'#06b6d4', desc:'Gentle fade over distance', fn: r => Math.max(0,1-Math.log(1+r*9)/Math.log(10)) }
 };
 let activeCurve = 'linear';
-
-function calculateGain(dist) {
-  const ratio = Math.min(1, dist / EARSHOT);
-  return CURVES[activeCurve].fn(ratio);
-}
-function toDb(gain) { return gain > 0 ? 20 * Math.log10(gain) : -Infinity; }
+function calculateGain(dist){ return CURVES[activeCurve].fn(Math.min(1, dist/EARSHOT)); }
+function toDb(gain){ return gain>0 ? 20*Math.log10(gain) : -Infinity; }
 
 // ══════════════════════════════════════════════════════════════════
 //  CONFIG + STATE
@@ -159,23 +182,22 @@ const AVATAR_R   = 18;
 const MOVE_SPEED = 4;
 const THROTTLE   = 50;
 const EARSHOT    = 150;
-const ICE_CFG    = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' },
-                                  { urls: 'stun:stun1.l.google.com:19302' }] };
+const LERP_SPEED = 0.18;   // 60 FPS interpolation factor (Week 4)
+const ICE_CFG    = { iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}] };
 
-let socket, myId, myColor, myName;
-let myX = 450, myY = 300;
-let users     = {};
+let socket, myId, myColor, myName, myRoom;
+let myX=450, myY=300;
+let users     = {};   // id → { id, name, x, y, color, tx, ty }  (tx/ty = target for lerp)
 let nearbyIds = [];
 let peerConns = {};
-let localStream = null;
-let audioCtx    = null;
-let audioPeers  = {};
-let micEnabled  = false;
-let keysDown    = {};
-let lastEmit    = 0;
+let localStream=null, audioCtx=null, audioPeers={};
+let micEnabled=false, keysDown={}, lastEmit=0;
+
+// 60 FPS tracking (Week 4)
+let lastFrameTime=0, frameCount=0, fps=0, fpsTimer=0;
 
 // ══════════════════════════════════════════════════════════════════
-//  DOM REFS
+//  DOM
 // ══════════════════════════════════════════════════════════════════
 const canvas      = document.getElementById('world');
 const ctx         = canvas.getContext('2d');
@@ -184,44 +206,71 @@ const attenCtx    = attenCanvas.getContext('2d');
 const joinScr     = document.getElementById('join-screen');
 const gameScr     = document.getElementById('game-screen');
 const nameInput   = document.getElementById('name-input');
+const roomInput   = document.getElementById('room-input');
 const connDot     = document.getElementById('conn-dot');
 const statusTxt   = document.getElementById('status-text');
 const proxBanner  = document.getElementById('prox-banner');
 const micBtn      = document.getElementById('mic-btn');
 const joinBtn     = document.getElementById('join-btn');
 const joinMsg     = document.getElementById('join-msg');
+const roomBadge   = document.getElementById('room-badge');
+const leaveBtn    = document.getElementById('leave-btn');
 
 // ══════════════════════════════════════════════════════════════════
 //  LOG
 // ══════════════════════════════════════════════════════════════════
-function log(msg, cls='') {
-  const el = document.createElement('div');
-  el.className = 'le ' + cls;
-  el.textContent = `[${new Date().toLocaleTimeString('en',{hour12:false})}] ${msg}`;
-  const l = document.getElementById('log');
-  l.appendChild(el); l.scrollTop = l.scrollHeight;
-  while (l.children.length > 100) l.removeChild(l.firstChild);
+function log(msg, cls=''){
+  const el=document.createElement('div');
+  el.className='le '+cls;
+  el.textContent=`[${new Date().toLocaleTimeString('en',{hour12:false})}] ${msg}`;
+  const l=document.getElementById('log');
+  l.appendChild(el); l.scrollTop=l.scrollHeight;
+  while(l.children.length>100) l.removeChild(l.firstChild);
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  CURVE UI
+//  ROOM LIST (Week 4) — loaded from /api/rooms
 // ══════════════════════════════════════════════════════════════════
-function buildCurveUI() {
-  const wrap = document.getElementById('curve-buttons');
-  wrap.innerHTML = '';
-  Object.entries(CURVES).forEach(([key, c]) => {
-    const btn = document.createElement('div');
-    btn.className = 'curve-btn' + (key === activeCurve ? ' active' : '');
-    btn.id = 'cb-' + key;
-    btn.style.color = key === activeCurve ? c.color : '';
-    btn.innerHTML = `<div class="cdot" style="background:${c.color}"></div>
+async function loadRooms(){
+  try {
+    const res   = await fetch(window.location.origin+'/api/rooms');
+    const rooms = await res.json();
+    const wrap  = document.getElementById('room-list');
+    wrap.innerHTML = '';
+    if (!rooms.length){
+      wrap.innerHTML='<span id="no-rooms">No active rooms yet — create one!</span>';
+      return;
+    }
+    rooms.forEach(r => {
+      const chip = document.createElement('div');
+      chip.className = 'room-chip';
+      chip.innerHTML = `${r.name} <span class="rc-count">${r.users}</span>`;
+      chip.onclick   = () => { roomInput.value = r.name; };
+      wrap.appendChild(chip);
+    });
+  } catch(e){ /* server not running yet */ }
+}
+loadRooms();
+setInterval(loadRooms, 5000);  // refresh every 5s
+
+// ══════════════════════════════════════════════════════════════════
+//  CURVE UI (Week 3)
+// ══════════════════════════════════════════════════════════════════
+function buildCurveUI(){
+  const wrap=document.getElementById('curve-buttons'); wrap.innerHTML='';
+  Object.entries(CURVES).forEach(([key,c])=>{
+    const btn=document.createElement('div');
+    btn.className='curve-btn'+(key===activeCurve?' active':'');
+    btn.id='cb-'+key;
+    btn.style.color=key===activeCurve?c.color:'';
+    btn.innerHTML=`<div class="cdot" style="background:${c.color}"></div>
       <div><div>${c.label}</div><div class="cdesc">${c.desc}</div></div>`;
-    btn.onclick = () => {
-      activeCurve = key;
-      document.querySelectorAll('.curve-btn').forEach(b => {
-        const k = b.id.replace('cb-','');
-        b.classList.toggle('active', k === key);
-        b.style.color = k === key ? CURVES[k].color : '';
+    btn.onclick=()=>{
+      activeCurve=key;
+      document.querySelectorAll('.curve-btn').forEach(b=>{
+        const k=b.id.replace('cb-','');
+        b.classList.toggle('active',k===key);
+        b.style.color=k===key?CURVES[k].color:'';
       });
       drawAttenuationGraph();
       Object.keys(audioPeers).forEach(updateGain);
@@ -230,409 +279,374 @@ function buildCurveUI() {
   });
 }
 
-function drawAttenuationGraph() {
-  const w = attenCanvas.width  = attenCanvas.offsetWidth;
-  const h = attenCanvas.height = attenCanvas.offsetHeight || 80;
-  attenCtx.clearRect(0, 0, w, h);
-
-  // Grid
-  attenCtx.strokeStyle = '#1e293b'; attenCtx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = i * h / 4;
-    attenCtx.beginPath(); attenCtx.moveTo(0,y); attenCtx.lineTo(w,y); attenCtx.stroke();
-  }
-
-  // Curve
-  const c = CURVES[activeCurve];
-  attenCtx.beginPath(); attenCtx.strokeStyle = c.color; attenCtx.lineWidth = 2;
-  for (let px = 0; px < w; px++) {
-    const ratio = px / w;
-    const gain  = CURVES[activeCurve].fn(ratio);
-    const y     = h - gain * h;
-    px === 0 ? attenCtx.moveTo(px, y) : attenCtx.lineTo(px, y);
+function drawAttenuationGraph(){
+  const w=attenCanvas.width=attenCanvas.offsetWidth;
+  const h=attenCanvas.height=attenCanvas.offsetHeight||80;
+  attenCtx.clearRect(0,0,w,h);
+  attenCtx.strokeStyle='#1e293b'; attenCtx.lineWidth=1;
+  for(let i=0;i<=4;i++){const y=i*h/4;attenCtx.beginPath();attenCtx.moveTo(0,y);attenCtx.lineTo(w,y);attenCtx.stroke();}
+  const c=CURVES[activeCurve];
+  attenCtx.beginPath(); attenCtx.strokeStyle=c.color; attenCtx.lineWidth=2;
+  for(let px=0;px<w;px++){
+    const g=CURVES[activeCurve].fn(px/w);
+    const y=h-g*h;
+    px===0?attenCtx.moveTo(px,y):attenCtx.lineTo(px,y);
   }
   attenCtx.stroke();
-
-  // Labels
-  attenCtx.fillStyle = '#475569'; attenCtx.font = '9px monospace';
-  attenCtx.textAlign = 'left';  attenCtx.fillText('100%', 2, 10);
-  attenCtx.textAlign = 'left';  attenCtx.fillText('0%',   2, h - 2);
-  attenCtx.textAlign = 'right'; attenCtx.fillText('0px',  w - 2, h - 2);
-  attenCtx.textAlign = 'right'; attenCtx.fillText(`${EARSHOT}px`, w - 2, 10);
+  attenCtx.fillStyle='#475569'; attenCtx.font='9px monospace';
+  attenCtx.textAlign='left';  attenCtx.fillText('100%',2,10);
+  attenCtx.textAlign='left';  attenCtx.fillText('0%',2,h-2);
+  attenCtx.textAlign='right'; attenCtx.fillText(`${EARSHOT}px`,w-2,10);
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  JOIN
+//  JOIN / LEAVE (Week 4)
 // ══════════════════════════════════════════════════════════════════
-function joinSpace() {
-  if (socket && socket.connected) return;
+function joinSpace(){
+  if(socket&&socket.connected) return;
   myName = nameInput.value.trim() || 'Anonymous';
+  myRoom = roomInput.value.trim() || 'General';
 
-  joinBtn.textContent = '🔌 Connecting...';
-  joinBtn.disabled = true;
-  joinMsg.textContent = 'Connecting...';
+  joinBtn.textContent='🔌 Connecting...'; joinBtn.disabled=true;
+  joinMsg.textContent='Connecting...';
+  if(socket){ try{socket.disconnect();}catch(e){} socket=null; }
 
-  if (socket) { try { socket.disconnect(); } catch(e){} socket = null; }
-
-  // Auto-detect server URL — works with localhost AND ngrok
-  const SERVER = window.location.origin;
-
-  socket = io(SERVER, {
-    transports:         ['polling', 'websocket'],  // polling first = always works through proxies
-    upgrade:            true,
-    reconnection:       true,
-    reconnectionAttempts: 10,
-    reconnectionDelay:  2000,
-    timeout:            20000,
-    extraHeaders:       { 'ngrok-skip-browser-warning': 'true' }
+  socket = io(window.location.origin, {
+    transports:['polling','websocket'],
+    upgrade:true, reconnection:true,
+    reconnectionAttempts:10, reconnectionDelay:2000,
+    timeout:20000,
+    extraHeaders:{'ngrok-skip-browser-warning':'true'}
   });
 
-  socket.on('connect', () => {
+  socket.on('connect', ()=>{
     connDot.classList.add('on');
-    statusTxt.textContent = `Connected · ${myName}`;
-    joinMsg.textContent = '';
-    socket.emit('join', { name: myName, x: myX, y: myY });
-    joinScr.style.display  = 'none';
-    gameScr.style.display  = 'flex';
-    resizeCanvas();
-    buildCurveUI();
-    drawAttenuationGraph();
-    startLoop();
-    log('✅ Connected to ProxiSpeak', 'lg');
+    statusTxt.textContent=`Connected · ${myName}`;
+    joinMsg.textContent='';
+    socket.emit('join',{name:myName, room:myRoom, x:myX, y:myY});
+    joinScr.style.display='none';
+    gameScr.style.display='flex';
+    leaveBtn.style.display='';
+    roomBadge.textContent='🏠 '+myRoom; roomBadge.style.display='';
+    resizeCanvas(); buildCurveUI(); drawAttenuationGraph(); startLoop();
+    log(`✅ Connected to room "${myRoom}"`, 'lg');
   });
 
-  socket.on('disconnect', reason => {
+  socket.on('disconnect', reason=>{
     connDot.classList.remove('on');
-    statusTxt.textContent = 'Disconnected — reconnecting...';
+    statusTxt.textContent='Disconnected — reconnecting...';
     log(`Disconnected: ${reason}`, 'lr');
   });
 
-  socket.on('connect_error', err => {
-    console.error('connect_error', err);
-    log(`❌ Connection error: ${err.message}`, 'lr');
-    joinMsg.textContent = `❌ ${err.message} — retrying...`;
-    // Don't reset UI — socket.io will auto-retry up to reconnectionAttempts
+  socket.on('connect_error', err=>{
+    log(`❌ ${err.message}`, 'lr');
+    joinMsg.textContent=`❌ ${err.message} — retrying...`;
   });
 
-  socket.on('reconnect_failed', () => {
-    joinMsg.textContent = '❌ Could not connect. Check server is running.';
-    joinBtn.textContent = 'Join Space';
-    joinBtn.disabled = false;
-    joinScr.style.display = 'flex';
-    gameScr.style.display = 'none';
-    socket = null;
+  socket.on('reconnect_failed', ()=>{
+    joinMsg.textContent='❌ Could not connect. Is the server running?';
+    joinBtn.textContent='Join Space'; joinBtn.disabled=false;
+    joinScr.style.display='flex'; gameScr.style.display='none';
+    socket=null;
   });
 
-  // ── Game events ──────────────────────────────────────────────
-  socket.on('self:joined', ({ id, color }) => {
-    myId = id; myColor = color;
-    log(`Joined as "${myName}"`, 'lg');
+  // ── events ──────────────────────────────────────────────────────
+  socket.on('self:joined',({id,color,room})=>{
+    myId=id; myColor=color; myRoom=room;
+    log(`Joined as "${myName}" in room "${room}"`, 'lg');
   });
 
-  socket.on('users:update', all => {
-    users = {};
-    all.forEach(u => { users[u.id] = u; });
-    renderUsers();
-    renderMeters();
+  socket.on('users:update', all=>{
+    // Keep lerp targets for existing users (Week 4 smooth movement)
+    const prev={...users};
+    users={};
+    all.forEach(u=>{
+      users[u.id]={...u, tx:u.x, ty:u.y};
+      if(prev[u.id]){ users[u.id].x=prev[u.id].x; users[u.id].y=prev[u.id].y; }
+    });
+    document.getElementById('user-count').textContent=all.length;
+    renderUsers(); renderMeters();
   });
 
-  socket.on('user:moved', ({ id, x, y }) => {
-    if (users[id]) { users[id].x = x; users[id].y = y; }
-    if (audioPeers[id]) updateGain(id);
+  socket.on('user:moved',({id,x,y})=>{
+    if(users[id]){ users[id].tx=x; users[id].ty=y; }  // set TARGET, lerp will do the rest
+    if(audioPeers[id]) updateGain(id);
   });
 
-  socket.on('user:left', ({ id }) => {
-    if (users[id]) log(`${users[id].name} left`, 'ly');
-    closePC(id, false);
-    delete users[id];
-    renderUsers();
-    renderMeters();
+  socket.on('user:left',({id})=>{
+    if(users[id]) log(`${users[id].name} left`, 'ly');
+    closePC(id,false); delete users[id];
+    document.getElementById('user-count').textContent=Object.keys(users).length;
+    renderUsers(); renderMeters();
   });
 
-  socket.on('proximity:update', ({ nearbyIds: ids }) => {
-    const prev = new Set(nearbyIds);
-    const next = new Set(ids);
-    ids.filter(id => !prev.has(id)).forEach(id => startCall(id));
-    nearbyIds.filter(id => !next.has(id)).forEach(id => closePC(id, true));
-    nearbyIds = ids;
-    proxBanner.style.display = ids.length ? 'block' : 'none';
-    renderUsers();
-    renderMeters();
+  socket.on('proximity:update',({nearbyIds:ids})=>{
+    const prev=new Set(nearbyIds), next=new Set(ids);
+    ids.filter(id=>!prev.has(id)).forEach(id=>startCall(id));
+    nearbyIds.filter(id=>!next.has(id)).forEach(id=>closePC(id,true));
+    nearbyIds=ids;
+    proxBanner.style.display=ids.length?'block':'none';
+    renderUsers(); renderMeters();
   });
 
-  // WebRTC signaling
-  socket.on('webrtc:offer',         ({ from, offer })     => handleOffer(from, offer));
-  socket.on('webrtc:answer',        ({ from, answer })    => handleAnswer(from, answer));
-  socket.on('webrtc:ice-candidate', ({ from, candidate }) => handleICE(from, candidate));
-  socket.on('webrtc:hangup',        ({ from })            => closePC(from, false));
+  socket.on('webrtc:offer',        ({from,offer})    =>handleOffer(from,offer));
+  socket.on('webrtc:answer',       ({from,answer})   =>handleAnswer(from,answer));
+  socket.on('webrtc:ice-candidate',({from,candidate})=>handleICE(from,candidate));
+  socket.on('webrtc:hangup',       ({from})          =>closePC(from,false));
 }
 
-nameInput.addEventListener('keydown', e => { if (e.key==='Enter') joinSpace(); e.stopPropagation(); });
-
-// ══════════════════════════════════════════════════════════════════
-//  CANVAS + LOOP
-// ══════════════════════════════════════════════════════════════════
-function resizeCanvas() {
-  const wrap = document.getElementById('canvas-wrap');
-  canvas.width  = wrap.clientWidth;
-  canvas.height = wrap.clientHeight;
+function leaveRoom(){
+  if(socket){ socket.disconnect(); socket=null; }
+  Object.keys(peerConns).forEach(id=>closePC(id,false));
+  users={}; nearbyIds=[];
+  gameScr.style.display='none'; joinScr.style.display='flex';
+  leaveBtn.style.display='none'; roomBadge.style.display='none';
+  connDot.classList.remove('on');
+  statusTxt.textContent='Not connected';
+  joinBtn.textContent='Join Space'; joinBtn.disabled=false;
+  loadRooms();
+  log('Left room', 'ly');
 }
-window.addEventListener('resize', () => { resizeCanvas(); drawAttenuationGraph(); });
 
-function startLoop() { requestAnimationFrame(loop); }
+[nameInput, roomInput].forEach(inp=>inp.addEventListener('keydown',e=>{if(e.key==='Enter')joinSpace();e.stopPropagation();}));
 
-function loop() {
+// ══════════════════════════════════════════════════════════════════
+//  CANVAS + 60 FPS LOOP (Week 4)
+// ══════════════════════════════════════════════════════════════════
+function resizeCanvas(){
+  const wrap=document.getElementById('canvas-wrap');
+  canvas.width=wrap.clientWidth; canvas.height=wrap.clientHeight;
+}
+window.addEventListener('resize',()=>{resizeCanvas();drawAttenuationGraph();});
+
+function startLoop(){ requestAnimationFrame(loop); }
+
+function loop(now){
+  const dt = lastFrameTime ? (now-lastFrameTime)/16.67 : 1; // normalized delta
+  lastFrameTime=now;
+
+  // FPS counter (Week 4)
+  frameCount++;
+  if(now-fpsTimer>500){
+    fps=Math.round(frameCount*1000/(now-fpsTimer));
+    frameCount=0; fpsTimer=now;
+    document.getElementById('fps-counter').textContent=`${fps} FPS`;
+  }
+
   handleKeys();
+  lerpRemoteAvatars(dt);  // 60 FPS smooth movement (Week 4)
   draw();
   updateMeterBars();
   requestAnimationFrame(loop);
 }
 
-function draw() {
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
+// Lerp remote avatar positions → butter-smooth 60 FPS movement (Week 4)
+function lerpRemoteAvatars(dt){
+  Object.values(users).forEach(u=>{
+    if(u.id===myId) return;
+    if(u.tx==null) u.tx=u.x;
+    if(u.ty==null) u.ty=u.y;
+    u.x += (u.tx - u.x) * Math.min(1, LERP_SPEED * dt);
+    u.y += (u.ty - u.y) * Math.min(1, LERP_SPEED * dt);
+  });
+}
+
+function draw(){
+  const w=canvas.width, h=canvas.height;
+  ctx.clearRect(0,0,w,h);
 
   // Grid
-  ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
-  for (let x=0; x<=w; x+=40){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-  for (let y=0; y<=h; y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  ctx.strokeStyle='#1e293b'; ctx.lineWidth=1;
+  for(let x=0;x<=w;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
+  for(let y=0;y<=h;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
 
   // Earshot ring
-  if (myId) {
-    ctx.beginPath(); ctx.arc(myX, myY, EARSHOT, 0, Math.PI*2);
-    ctx.strokeStyle = 'rgba(79,70,229,0.25)'; ctx.lineWidth = 1.5;
+  if(myId){
+    ctx.beginPath(); ctx.arc(myX,myY,EARSHOT,0,Math.PI*2);
+    ctx.strokeStyle='rgba(79,70,229,0.25)'; ctx.lineWidth=1.5;
     ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(79,70,229,0.05)'; ctx.fill();
+    ctx.fillStyle='rgba(79,70,229,0.05)'; ctx.fill();
   }
 
-  // Connection lines with gain-based opacity
-  nearbyIds.forEach(id => {
-    const u = users[id]; if (!u) return;
-    const dist = Math.sqrt((u.x-myX)**2 + (u.y-myY)**2);
-    const gain = calculateGain(dist);
-    const col  = CURVES[activeCurve].color;
-    ctx.beginPath(); ctx.moveTo(myX, myY); ctx.lineTo(u.x, u.y);
-    ctx.strokeStyle = col + Math.round(gain*255).toString(16).padStart(2,'0');
-    ctx.lineWidth = 2; ctx.stroke();
-
-    // dB label
-    if (peerConns[id]) {
-      const db  = toDb(gain);
-      const mx  = (myX+u.x)/2, my2 = (myY+u.y)/2 - 12;
-      const lbl = isFinite(db) ? `${db.toFixed(1)}dB` : '-∞dB';
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(mx-22, my2-7, 44, 14);
-      ctx.fillStyle = col; ctx.font = 'bold 9px monospace';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(lbl, mx, my2);
+  // Connection lines
+  nearbyIds.forEach(id=>{
+    const u=users[id]; if(!u) return;
+    const dist=Math.sqrt((u.x-myX)**2+(u.y-myY)**2);
+    const gain=calculateGain(dist);
+    const col=CURVES[activeCurve].color;
+    ctx.beginPath(); ctx.moveTo(myX,myY); ctx.lineTo(u.x,u.y);
+    ctx.strokeStyle=col+Math.round(gain*255).toString(16).padStart(2,'0');
+    ctx.lineWidth=2; ctx.stroke();
+    if(peerConns[id]){
+      const db=toDb(gain), mx=(myX+u.x)/2, my2=(myY+u.y)/2-12;
+      const lbl=isFinite(db)?`${db.toFixed(1)}dB`:'-∞dB';
+      ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(mx-22,my2-7,44,14);
+      ctx.fillStyle=col; ctx.font='bold 9px monospace';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(lbl,mx,my2);
     }
   });
 
-  Object.values(users).forEach(u => drawAvatar(u));
+  Object.values(users).forEach(u=>drawAvatar(u));
 }
 
-function drawAvatar(u) {
-  const isMe     = u.id === myId;
-  const isNearby = nearbyIds.includes(u.id);
-  const isRTC    = !!peerConns[u.id];
-  const c        = u.color || '#4F46E5';
-
-  if (isRTC)     { ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R+8,0,Math.PI*2); ctx.fillStyle='rgba(99,102,241,0.15)'; ctx.fill(); }
-  else if(isNearby){ ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R+5,0,Math.PI*2); ctx.fillStyle='rgba(16,185,129,0.12)'; ctx.fill(); }
-
-  ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R,0,Math.PI*2); ctx.fillStyle=c; ctx.fill();
-  if (isMe) { ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R+3,0,Math.PI*2); ctx.strokeStyle='white'; ctx.lineWidth=2; ctx.stroke(); }
-
-  ctx.fillStyle='white'; ctx.font=`bold ${AVATAR_R}px Segoe UI`;
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText((u.name||'?')[0].toUpperCase(), u.x, u.y);
-  ctx.fillStyle=isMe?'white':'#94a3b8'; ctx.font=isMe?'bold 11px Segoe UI':'11px Segoe UI';
-  ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.fillText(u.name+(isMe?' (you)':''), u.x, u.y+AVATAR_R+4);
+function drawAvatar(u){
+  const isMe=u.id===myId, isNear=nearbyIds.includes(u.id), isRTC=!!peerConns[u.id];
+  const c=u.color||'#4F46E5';
+  if(isRTC){ctx.beginPath();ctx.arc(u.x,u.y,AVATAR_R+8,0,Math.PI*2);ctx.fillStyle='rgba(99,102,241,0.15)';ctx.fill();}
+  else if(isNear){ctx.beginPath();ctx.arc(u.x,u.y,AVATAR_R+5,0,Math.PI*2);ctx.fillStyle='rgba(16,185,129,0.12)';ctx.fill();}
+  ctx.beginPath();ctx.arc(u.x,u.y,AVATAR_R,0,Math.PI*2);ctx.fillStyle=c;ctx.fill();
+  if(isMe){ctx.beginPath();ctx.arc(u.x,u.y,AVATAR_R+3,0,Math.PI*2);ctx.strokeStyle='white';ctx.lineWidth=2;ctx.stroke();}
+  ctx.fillStyle='white';ctx.font=`bold ${AVATAR_R}px Segoe UI`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText((u.name||'?')[0].toUpperCase(),u.x,u.y);
+  ctx.fillStyle=isMe?'white':'#94a3b8';ctx.font=isMe?'bold 11px Segoe UI':'11px Segoe UI';
+  ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText(u.name+(isMe?' (you)':''),u.x,u.y+AVATAR_R+4);
 }
 
 // ══════════════════════════════════════════════════════════════════
 //  MOVEMENT
 // ══════════════════════════════════════════════════════════════════
-canvas.addEventListener('click', e => {
-  const r = canvas.getBoundingClientRect();
-  moveTo(e.clientX - r.left, e.clientY - r.top);
-});
-document.addEventListener('keydown', e => { keysDown[e.key]=true; });
-document.addEventListener('keyup',   e => { keysDown[e.key]=false; });
+canvas.addEventListener('click',e=>{const r=canvas.getBoundingClientRect();moveTo(e.clientX-r.left,e.clientY-r.top);});
+document.addEventListener('keydown',e=>{keysDown[e.key]=true;});
+document.addEventListener('keyup',  e=>{keysDown[e.key]=false;});
 
-function handleKeys() {
-  if (!myId) return;
-  let dx=0, dy=0;
-  if (keysDown['ArrowLeft']  || keysDown['a'] || keysDown['A']) dx -= MOVE_SPEED;
-  if (keysDown['ArrowRight'] || keysDown['d'] || keysDown['D']) dx += MOVE_SPEED;
-  if (keysDown['ArrowUp']    || keysDown['w'] || keysDown['W']) dy -= MOVE_SPEED;
-  if (keysDown['ArrowDown']  || keysDown['s'] || keysDown['S']) dy += MOVE_SPEED;
-  if (dx||dy) { moveTo(myX+dx, myY+dy); }
+function handleKeys(){
+  if(!myId) return;
+  let dx=0,dy=0;
+  if(keysDown['ArrowLeft'] ||keysDown['a']||keysDown['A']) dx-=MOVE_SPEED;
+  if(keysDown['ArrowRight']||keysDown['d']||keysDown['D']) dx+=MOVE_SPEED;
+  if(keysDown['ArrowUp']   ||keysDown['w']||keysDown['W']) dy-=MOVE_SPEED;
+  if(keysDown['ArrowDown'] ||keysDown['s']||keysDown['S']) dy+=MOVE_SPEED;
+  if(dx||dy) moveTo(myX+dx,myY+dy);
 }
 
-function moveTo(x, y) {
-  myX = Math.max(AVATAR_R, Math.min(canvas.width -AVATAR_R, x));
-  myY = Math.max(AVATAR_R, Math.min(canvas.height-AVATAR_R, y));
-  emitMove();
-}
-
-function emitMove() {
-  const now = Date.now();
-  if (!socket || !myId || now-lastEmit < THROTTLE) return;
-  lastEmit = now;
-  socket.emit('move', { x: myX, y: myY });
-  if (users[myId]) { users[myId].x=myX; users[myId].y=myY; }
+function moveTo(x,y){
+  myX=Math.max(AVATAR_R,Math.min(canvas.width-AVATAR_R,x));
+  myY=Math.max(AVATAR_R,Math.min(canvas.height-AVATAR_R,y));
+  if(users[myId]){users[myId].x=myX;users[myId].y=myY;users[myId].tx=myX;users[myId].ty=myY;}
+  const now=Date.now();
+  if(!socket||!myId||now-lastEmit<THROTTLE) return;
+  lastEmit=now; socket.emit('move',{x:myX,y:myY});
 }
 
 // ══════════════════════════════════════════════════════════════════
 //  MICROPHONE
 // ══════════════════════════════════════════════════════════════════
-async function toggleMic() {
-  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') await audioCtx.resume();
-
-  if (!micEnabled) {
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:false });
-      micEnabled = true;
-      micBtn.textContent = '🎤 Mic ON'; micBtn.classList.add('active');
-      log('Microphone enabled', 'lg');
-      Object.keys(peerConns).forEach(id => closePC(id, true));
-      nearbyIds.forEach(id => startCall(id));
-    } catch(e) { log(`Mic error: ${e.message}`, 'lr'); }
-  } else {
-    localStream?.getTracks().forEach(t => t.stop());
-    localStream = null; micEnabled = false;
-    micBtn.textContent = '🎤 Mic OFF'; micBtn.classList.remove('active');
-    log('Microphone disabled', 'ly');
+async function toggleMic(){
+  if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') await audioCtx.resume();
+  if(!micEnabled){
+    try{
+      localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+      micEnabled=true; micBtn.textContent='🎤 Mic ON'; micBtn.classList.add('active');
+      log('Microphone enabled','lg');
+      Object.keys(peerConns).forEach(id=>closePC(id,true));
+      nearbyIds.forEach(id=>startCall(id));
+    }catch(e){log(`Mic error: ${e.message}`,'lr');}
+  }else{
+    localStream?.getTracks().forEach(t=>t.stop());
+    localStream=null; micEnabled=false;
+    micBtn.textContent='🎤 Mic OFF'; micBtn.classList.remove('active');
+    log('Microphone disabled','ly');
   }
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  WebRTC  (Week 2)
+//  WebRTC (Week 2)
 // ══════════════════════════════════════════════════════════════════
-function startCall(peerId) {
-  if (peerConns[peerId] || !myId || myId > peerId) return;
-  const pc = createPC(peerId);
-  if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-  pc.createOffer()
-    .then(o => pc.setLocalDescription(o))
-    .then(() => socket.emit('webrtc:offer', { targetId: peerId, offer: pc.localDescription }))
-    .catch(e => log(`Offer error: ${e.message}`, 'lr'));
+function startCall(peerId){
+  if(peerConns[peerId]||!myId||myId>peerId) return;
+  const pc=createPC(peerId);
+  if(localStream) localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+  pc.createOffer().then(o=>pc.setLocalDescription(o))
+    .then(()=>socket.emit('webrtc:offer',{targetId:peerId,offer:pc.localDescription}))
+    .catch(e=>log(`Offer error: ${e.message}`,'lr'));
 }
-
-async function handleOffer(from, offer) {
-  const pc = createPC(from);
-  if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+async function handleOffer(from,offer){
+  const pc=createPC(from);
+  if(localStream) localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
   await pc.setRemoteDescription(new RTCSessionDescription(offer));
-  const ans = await pc.createAnswer();
+  const ans=await pc.createAnswer();
   await pc.setLocalDescription(ans);
-  socket.emit('webrtc:answer', { targetId: from, answer: pc.localDescription });
+  socket.emit('webrtc:answer',{targetId:from,answer:pc.localDescription});
 }
+async function handleAnswer(from,answer){const pc=peerConns[from];if(pc)await pc.setRemoteDescription(new RTCSessionDescription(answer)).catch(()=>{});}
+async function handleICE(from,candidate){const pc=peerConns[from];if(pc&&candidate)await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(()=>{});}
 
-async function handleAnswer(from, answer) {
-  const pc = peerConns[from];
-  if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer)).catch(()=>{});
-}
-
-async function handleICE(from, candidate) {
-  const pc = peerConns[from];
-  if (pc && candidate) await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(()=>{});
-}
-
-function createPC(peerId) {
-  const pc = new RTCPeerConnection(ICE_CFG);
-  peerConns[peerId] = pc;
-
-  pc.onicecandidate = e => {
-    if (e.candidate) socket.emit('webrtc:ice-candidate', { targetId: peerId, candidate: e.candidate });
-  };
-
-  pc.ontrack = e => {
-    if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    const source = audioCtx.createMediaStreamSource(e.streams[0]);
-    const gain   = audioCtx.createGain();
-    source.connect(gain); gain.connect(audioCtx.destination);
-    audioPeers[peerId] = { source, gain };
+function createPC(peerId){
+  const pc=new RTCPeerConnection(ICE_CFG);
+  peerConns[peerId]=pc;
+  pc.onicecandidate=e=>{if(e.candidate)socket.emit('webrtc:ice-candidate',{targetId:peerId,candidate:e.candidate});};
+  pc.ontrack=e=>{
+    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const src=audioCtx.createMediaStreamSource(e.streams[0]);
+    const gain=audioCtx.createGain();
+    src.connect(gain);gain.connect(audioCtx.destination);
+    audioPeers[peerId]={source:src,gain};
     updateGain(peerId);
-    log(`🔊 Audio from ${users[peerId]?.name || peerId.slice(0,8)}`, 'lg');
+    log(`🔊 Audio from ${users[peerId]?.name||peerId.slice(0,8)}`,'lg');
   };
-
-  pc.onconnectionstatechange = () => {
-    if (['failed','disconnected','closed'].includes(pc.connectionState)) closePC(peerId, false);
-  };
+  pc.onconnectionstatechange=()=>{if(['failed','disconnected','closed'].includes(pc.connectionState))closePC(peerId,false);};
   return pc;
 }
 
-function closePC(peerId, sendHangup) {
-  const pc = peerConns[peerId]; if (!pc) return;
+function closePC(peerId,sendHangup){
+  const pc=peerConns[peerId]; if(!pc)return;
   pc.close(); delete peerConns[peerId];
-  const ap = audioPeers[peerId];
-  if (ap) { ap.source?.disconnect(); ap.gain?.disconnect(); delete audioPeers[peerId]; }
-  if (sendHangup && socket) socket.emit('webrtc:hangup', { targetId: peerId });
+  const ap=audioPeers[peerId];
+  if(ap){ap.source?.disconnect();ap.gain?.disconnect();delete audioPeers[peerId];}
+  if(sendHangup&&socket)socket.emit('webrtc:hangup',{targetId:peerId});
 }
 
-// Volume via active attenuation curve  (Week 3)
-function updateGain(peerId) {
-  const ap = audioPeers[peerId], u = users[peerId];
-  if (!ap || !u) return;
-  const dist = Math.sqrt((u.x-myX)**2 + (u.y-myY)**2);
-  const gain = calculateGain(dist);
-  ap.gain.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.05);
+function updateGain(peerId){
+  const ap=audioPeers[peerId],u=users[peerId]; if(!ap||!u) return;
+  const dist=Math.sqrt((u.x-myX)**2+(u.y-myY)**2);
+  ap.gain.gain.setTargetAtTime(calculateGain(dist),audioCtx.currentTime,0.05);
 }
 
 // ══════════════════════════════════════════════════════════════════
 //  SIDEBAR
 // ══════════════════════════════════════════════════════════════════
-function renderUsers() {
-  const ul = document.getElementById('user-list');
-  ul.innerHTML = '';
-  Object.values(users).forEach(u => {
-    const isMe   = u.id === myId;
-    const isNear = nearbyIds.includes(u.id);
-    const isRTC  = !!peerConns[u.id];
-    const div    = document.createElement('div');
-    div.className = 'user-item';
-    div.innerHTML = `<div class="udot" style="background:${u.color||'#4F46E5'}"></div>
+function renderUsers(){
+  const ul=document.getElementById('user-list'); ul.innerHTML='';
+  Object.values(users).forEach(u=>{
+    const isMe=u.id===myId,isNear=nearbyIds.includes(u.id),isRTC=!!peerConns[u.id];
+    const div=document.createElement('div'); div.className='user-item';
+    div.innerHTML=`<div class="udot" style="background:${u.color||'#4F46E5'}"></div>
       <span class="uname">${u.name}${isMe?' (you)':''}</span>
-      ${isRTC  ? '<span class="badge rtc">🔊 RTC</span>'  : ''}
-      ${isNear&&!isRTC ? '<span class="badge near">📡</span>' : ''}`;
+      ${isRTC?'<span class="badge rtc">🔊 RTC</span>'   :''}
+      ${isNear&&!isRTC?'<span class="badge near">📡</span>':''}`;
     ul.appendChild(div);
   });
 }
 
-function renderMeters() {
-  const el = document.getElementById('meters');
-  if (!nearbyIds.length) { el.innerHTML='<span style="font-size:10px;color:#334155">No nearby users</span>'; return; }
-  el.innerHTML = '';
-  nearbyIds.forEach(id => {
-    const u = users[id]; if (!u) return;
-    const dist = Math.sqrt((u.x-myX)**2+(u.y-myY)**2);
-    const gain = calculateGain(dist);
-    const pct  = Math.round(gain*100);
-    const db   = toDb(gain);
-    const dbStr= isFinite(db) ? db.toFixed(1)+'dB' : '-∞';
-    const barColor = pct>60 ? '#10b981' : pct>30 ? '#f59e0b' : '#60a5fa';
-    el.innerHTML += `<div class="meter-row">
+function renderMeters(){
+  const el=document.getElementById('meters');
+  if(!nearbyIds.length){el.innerHTML='<span style="font-size:10px;color:#334155">No nearby users</span>';return;}
+  el.innerHTML='';
+  nearbyIds.forEach(id=>{
+    const u=users[id]; if(!u)return;
+    const dist=Math.sqrt((u.x-myX)**2+(u.y-myY)**2);
+    const gain=calculateGain(dist),pct=Math.round(gain*100),db=toDb(gain);
+    const dbStr=isFinite(db)?db.toFixed(1)+'dB':'-∞';
+    const barColor=pct>60?'#10b981':pct>30?'#f59e0b':'#60a5fa';
+    el.innerHTML+=`<div class="meter-row">
       <span class="mlabel">${u.name}</span>
       <div class="mbar-bg"><div class="mbar" id="mb-${id}" style="width:${pct}%;background:${barColor}"></div></div>
-      <span class="mdb" id="md-${id}">${dbStr}</span>
-    </div>`;
+      <span class="mdb" id="md-${id}">${dbStr}</span></div>`;
   });
 }
 
-function updateMeterBars() {
-  nearbyIds.forEach(id => {
-    const u = users[id]; if (!u) return;
-    const dist  = Math.sqrt((u.x-myX)**2+(u.y-myY)**2);
-    const gain  = calculateGain(dist);
-    const pct   = Math.round(gain*100);
-    const db    = toDb(gain);
-    const bar   = document.getElementById('mb-'+id);
-    const dbEl  = document.getElementById('md-'+id);
-    if (bar) { bar.style.width=pct+'%'; bar.style.background=pct>60?'#10b981':pct>30?'#f59e0b':'#60a5fa'; }
-    if (dbEl) dbEl.textContent = isFinite(db) ? db.toFixed(1)+'dB' : '-∞';
+function updateMeterBars(){
+  nearbyIds.forEach(id=>{
+    const u=users[id]; if(!u)return;
+    const dist=Math.sqrt((u.x-myX)**2+(u.y-myY)**2);
+    const gain=calculateGain(dist),pct=Math.round(gain*100),db=toDb(gain);
+    const bar=document.getElementById('mb-'+id),dbEl=document.getElementById('md-'+id);
+    if(bar){bar.style.width=pct+'%';bar.style.background=pct>60?'#10b981':pct>30?'#f59e0b':'#60a5fa';}
+    if(dbEl)dbEl.textContent=isFinite(db)?db.toFixed(1)+'dB':'-∞';
   });
 }
 </script>
