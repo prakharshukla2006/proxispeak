@@ -1,105 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ProxiSpeak</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ProxiSpeak — Week 3</title>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #0f172a; color: #e2e8f0;
-      display: flex; flex-direction: column; height: 100vh; overflow: hidden;
-    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',sans-serif;background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column;height:100vh;overflow:hidden;}
 
-    /* Header */
-    header {
-      display: flex; align-items: center; gap: 10px;
-      padding: 8px 16px; background: #1e293b;
-      border-bottom: 1px solid #334155; flex-shrink: 0;
-    }
-    header h1 { font-size: 16px; font-weight: 700; color: #a5b4fc; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: #ef4444; transition: background 0.3s; }
-    .dot.on { background: #10b981; }
-    #status-text { font-size: 12px; color: #64748b; flex: 1; }
-    .hbtn {
-      padding: 4px 12px; border-radius: 5px; font-size: 12px; cursor: pointer;
-      border: 1px solid #334155; background: #1e293b; color: #cbd5e1; transition: all 0.2s;
-    }
-    .hbtn:hover { background: #334155; }
-    .hbtn.active { background: #10b981; border-color: #10b981; color: #fff; }
+    /* ── Header ── */
+    header{display:flex;align-items:center;gap:10px;padding:8px 16px;background:#1e293b;border-bottom:1px solid #334155;flex-shrink:0;}
+    header h1{font-size:15px;font-weight:700;color:#a5b4fc;}
+    .dot{width:9px;height:9px;border-radius:50%;background:#ef4444;transition:background .3s;}
+    .dot.on{background:#10b981;}
+    #status-text{font-size:12px;color:#64748b;flex:1;}
+    .hbtn{padding:4px 12px;border-radius:5px;font-size:12px;cursor:pointer;border:1px solid #334155;background:#1e293b;color:#cbd5e1;transition:all .2s;}
+    .hbtn:hover{background:#334155;}
+    .hbtn.active{background:#10b981;border-color:#10b981;color:#fff;}
 
-    /* Join Screen */
-    #join-screen {
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center; flex: 1; gap: 14px;
-    }
-    #join-screen h2 { font-size: 24px; font-weight: 700; color: #a5b4fc; }
-    #join-screen p  { font-size: 13px; color: #64748b; max-width: 360px; text-align: center; }
-    #join-screen input {
-      padding: 10px 16px; border-radius: 8px; border: 1px solid #475569;
-      background: #1e293b; color: white; font-size: 15px; width: 260px; outline: none;
-    }
-    #join-screen input:focus { border-color: #4f46e5; }
-    #join-screen button {
-      padding: 10px 32px; background: #4f46e5; color: white;
-      border: none; border-radius: 8px; font-size: 15px; cursor: pointer; transition: background 0.2s;
-    }
-    #join-screen button:hover { background: #4338ca; }
-    #join-screen button:disabled { background: #334155; cursor: not-allowed; }
-    #join-msg { font-size: 12px; color: #64748b; min-height: 18px; }
+    /* ── Join ── */
+    #join-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:16px;}
+    #join-screen h2{font-size:26px;font-weight:700;color:#a5b4fc;}
+    #join-screen p{font-size:13px;color:#64748b;max-width:380px;text-align:center;line-height:1.6;}
+    #join-screen input{padding:10px 16px;border-radius:8px;border:1px solid #475569;background:#1e293b;color:white;font-size:15px;width:280px;outline:none;transition:border-color .2s;}
+    #join-screen input:focus{border-color:#4f46e5;}
+    #join-screen button{padding:12px 36px;background:#4f46e5;color:white;border:none;border-radius:8px;font-size:15px;cursor:pointer;transition:background .2s;font-weight:600;}
+    #join-screen button:hover:not(:disabled){background:#4338ca;}
+    #join-screen button:disabled{background:#334155;cursor:not-allowed;}
+    #join-msg{font-size:12px;color:#64748b;min-height:20px;}
 
-    /* Game Screen */
-    #game-screen { display: none; flex: 1; flex-direction: row; overflow: hidden; min-height: 0; }
+    /* ── Game ── */
+    #game-screen{display:none;flex:1;flex-direction:row;overflow:hidden;min-height:0;}
 
-    /* Canvas */
-    #canvas-wrap { flex: 1; position: relative; overflow: hidden; }
-    canvas { display: block; cursor: crosshair; }
-    #move-hint {
-      position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
-      font-size: 11px; color: #334155; pointer-events: none;
-    }
-    #prox-banner {
-      display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-      background: #10b981; color: white; padding: 4px 16px;
-      border-radius: 999px; font-size: 12px; font-weight: 600; pointer-events: none;
-    }
+    /* ── Canvas ── */
+    #canvas-wrap{flex:1;position:relative;overflow:hidden;}
+    canvas{display:block;cursor:crosshair;}
+    #move-hint{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:11px;color:#334155;pointer-events:none;}
+    #prox-banner{display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#10b981;color:white;padding:4px 16px;border-radius:999px;font-size:12px;font-weight:600;pointer-events:none;}
 
-    /* Right Panel */
-    #panel {
-      width: 240px; background: #1e293b; border-left: 1px solid #334155;
-      display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto;
-    }
-    .panel-section { padding: 12px; border-bottom: 1px solid #0f172a; }
-    .sec-title {
-      font-size: 10px; font-weight: 700; color: #475569;
-      text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px;
-    }
+    /* ── Right Panel ── */
+    #panel{width:260px;background:#1e293b;border-left:1px solid #334155;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;}
+    .panel-section{padding:12px;border-bottom:1px solid #0f172a;}
+    .sec-title{font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
 
-    /* Users list */
-    .user-item {
-      display: flex; align-items: center; gap: 7px;
-      font-size: 12px; padding: 4px 0; border-bottom: 1px solid #0f172a;
-    }
-    .udot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-    .uname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .badge {
-      font-size: 9px; padding: 1px 5px; border-radius: 999px;
-      font-weight: 700; background: #1e293b; color: #475569;
-    }
-    .badge.near { background: #022c22; color: #10b981; }
-    .badge.rtc  { background: #1e1b4b; color: #818cf8; }
+    /* ── Users ── */
+    .user-item{display:flex;align-items:center;gap:7px;font-size:12px;padding:4px 0;border-bottom:1px solid #0f172a;}
+    .udot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+    .uname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .badge{font-size:9px;padding:1px 5px;border-radius:999px;font-weight:700;background:#1e293b;color:#475569;}
+    .badge.near{background:#022c22;color:#10b981;}
+    .badge.rtc{background:#1e1b4b;color:#818cf8;}
 
-    /* Log */
-    #log {
-      flex: 1; overflow-y: auto; padding: 8px;
-      font-size: 10px; font-family: monospace; background: #0f172a;
-    }
-    .le { padding: 2px 0; border-bottom: 1px solid #1e293b; color: #64748b; }
-    .lg { color: #10b981; }
-    .lr { color: #ef4444; }
-    .ly { color: #f59e0b; }
+    /* ── Attenuation Curves ── */
+    #curve-buttons{display:flex;flex-direction:column;gap:4px;}
+    .curve-btn{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;border:1px solid #334155;background:#0f172a;cursor:pointer;transition:all .15s;font-size:11px;color:#94a3b8;}
+    .curve-btn:hover{background:#1e293b;}
+    .curve-btn.active{font-weight:700;}
+    .cdot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+    .cdesc{font-size:9px;color:#475569;}
+
+    /* ── Graph ── */
+    #atten-canvas{width:100%;height:80px;display:block;border-radius:4px;background:#0f172a;}
+
+    /* ── dB Meters ── */
+    #meters{display:flex;flex-direction:column;gap:5px;}
+    .meter-row{display:flex;align-items:center;gap:6px;font-size:11px;}
+    .mlabel{width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#94a3b8;}
+    .mbar-bg{flex:1;background:#0f172a;border-radius:3px;height:8px;overflow:hidden;}
+    .mbar{height:100%;border-radius:3px;transition:width .1s,background .1s;}
+    .mdb{width:38px;text-align:right;font-size:10px;color:#64748b;font-family:monospace;}
+
+    /* ── Log ── */
+    #log{flex:1;overflow-y:auto;padding:8px;font-size:10px;font-family:monospace;background:#0f172a;min-height:80px;}
+    .le{padding:2px 0;border-bottom:1px solid #1e293b;color:#64748b;}
+    .lg{color:#10b981;}.lr{color:#ef4444;}.ly{color:#f59e0b;}
   </style>
 </head>
 <body>
@@ -111,16 +86,16 @@
   <button class="hbtn" id="mic-btn" onclick="toggleMic()">🎤 Mic OFF</button>
 </header>
 
-<!-- Join Screen -->
+<!-- Join -->
 <div id="join-screen">
   <h2>🎙️ ProxiSpeak</h2>
-  <p>Move your avatar close to others to automatically start a voice call</p>
-  <input id="name-input" type="text" placeholder="Enter your name..." maxlength="20" autofocus />
-  <button onclick="joinSpace()">Join Space</button>
+  <p>Week 3 · Proximity Audio · Move your avatar close to others to start a voice call automatically</p>
+  <input id="name-input" type="text" placeholder="Enter your name..." maxlength="20" autofocus/>
+  <button id="join-btn" onclick="joinSpace()">Join Space</button>
   <span id="join-msg"></span>
 </div>
 
-<!-- Game Screen -->
+<!-- Game -->
 <div id="game-screen">
   <div id="canvas-wrap">
     <canvas id="world"></canvas>
@@ -129,92 +104,187 @@
   </div>
 
   <div id="panel">
+    <!-- Users -->
     <div class="panel-section">
-      <div class="sec-title">👥 Users Online</div>
+      <div class="sec-title">👥 Online</div>
       <div id="user-list"></div>
     </div>
+
+    <!-- Attenuation Curves -->
     <div class="panel-section">
-      <div class="sec-title">📊 Stats</div>
-      <div id="stats" style="font-size:11px;color:#64748b;line-height:1.8;"></div>
+      <div class="sec-title">📉 Attenuation Curve</div>
+      <div id="curve-buttons"></div>
     </div>
+
+    <!-- Graph -->
+    <div class="panel-section">
+      <div class="sec-title">📊 Volume vs Distance</div>
+      <canvas id="atten-canvas"></canvas>
+    </div>
+
+    <!-- dB Meters -->
+    <div class="panel-section">
+      <div class="sec-title">🔊 Volume Meters</div>
+      <div id="meters"><span style="font-size:10px;color:#334155">No nearby users</span></div>
+    </div>
+
+    <!-- Log -->
     <div id="log"></div>
   </div>
 </div>
 
 <script>
-// ════════════════════════════════════════════════════════════════════════════
-//  CONFIG
-// ════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+//  ATTENUATION ENGINE  (Week 3)
+// ══════════════════════════════════════════════════════════════════
+const CURVES = {
+  linear:       { label:'Linear',       color:'#4f46e5', desc:'Volume drops evenly',       fn: r => Math.max(0, 1 - r) },
+  quadratic:    { label:'Quadratic',    color:'#10b981', desc:'Faster initial drop',        fn: r => Math.max(0, (1-r)**2) },
+  cubic:        { label:'Cubic',        color:'#f59e0b', desc:'Very steep at close range',  fn: r => Math.max(0, (1-r)**3) },
+  inverse_sq:   { label:'Inverse Sq.',  color:'#ec4899', desc:'Physics-accurate (1/d²)',    fn: r => r < .01 ? 1 : Math.min(1, 1/(r*r*10+1)) },
+  logarithmic:  { label:'Logarithmic',  color:'#06b6d4', desc:'Gentle fade over distance', fn: r => Math.max(0, 1 - Math.log(1 + r*9)/Math.log(10)) }
+};
+let activeCurve = 'linear';
+
+function calculateGain(dist) {
+  const ratio = Math.min(1, dist / EARSHOT);
+  return CURVES[activeCurve].fn(ratio);
+}
+function toDb(gain) { return gain > 0 ? 20 * Math.log10(gain) : -Infinity; }
+
+// ══════════════════════════════════════════════════════════════════
+//  CONFIG + STATE
+// ══════════════════════════════════════════════════════════════════
 const AVATAR_R   = 18;
 const MOVE_SPEED = 4;
-const THROTTLE   = 50;   // ms between move emissions
-const EARSHOT    = 150;  // must match server EARSHOT_PX
-const COLORS     = ['#4F46E5','#EF4444','#10B981','#F59E0B','#EC4899','#06B6D4','#8B5CF6','#F97316'];
-const ICE_CFG    = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+const THROTTLE   = 50;
+const EARSHOT    = 150;
+const ICE_CFG    = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' },
+                                  { urls: 'stun:stun1.l.google.com:19302' }] };
 
-// ════════════════════════════════════════════════════════════════════════════
-//  STATE
-// ════════════════════════════════════════════════════════════════════════════
 let socket, myId, myColor, myName;
 let myX = 450, myY = 300;
-let users      = {};
-let nearbyIds  = [];
-let peerConns  = {};
+let users     = {};
+let nearbyIds = [];
+let peerConns = {};
 let localStream = null;
 let audioCtx    = null;
-let audioPeers  = {};  // peerId → { source, gainNode }
+let audioPeers  = {};
 let micEnabled  = false;
 let keysDown    = {};
 let lastEmit    = 0;
 
-// ════════════════════════════════════════════════════════════════════════════
-//  DOM
-// ════════════════════════════════════════════════════════════════════════════
-const canvas    = document.getElementById('world');
-const ctx       = canvas.getContext('2d');
-const joinScr   = document.getElementById('join-screen');
-const gameScr   = document.getElementById('game-screen');
-const nameInput = document.getElementById('name-input');
-const connDot   = document.getElementById('conn-dot');
-const statusTxt = document.getElementById('status-text');
-const proxBanner= document.getElementById('prox-banner');
-const micBtn    = document.getElementById('mic-btn');
-const joinMsg   = document.getElementById('join-msg');
+// ══════════════════════════════════════════════════════════════════
+//  DOM REFS
+// ══════════════════════════════════════════════════════════════════
+const canvas      = document.getElementById('world');
+const ctx         = canvas.getContext('2d');
+const attenCanvas = document.getElementById('atten-canvas');
+const attenCtx    = attenCanvas.getContext('2d');
+const joinScr     = document.getElementById('join-screen');
+const gameScr     = document.getElementById('game-screen');
+const nameInput   = document.getElementById('name-input');
+const connDot     = document.getElementById('conn-dot');
+const statusTxt   = document.getElementById('status-text');
+const proxBanner  = document.getElementById('prox-banner');
+const micBtn      = document.getElementById('mic-btn');
+const joinBtn     = document.getElementById('join-btn');
+const joinMsg     = document.getElementById('join-msg');
 
-// ════════════════════════════════════════════════════════════════════════════
-//  LOGGING
-// ════════════════════════════════════════════════════════════════════════════
-function log(msg, cls = '') {
+// ══════════════════════════════════════════════════════════════════
+//  LOG
+// ══════════════════════════════════════════════════════════════════
+function log(msg, cls='') {
   const el = document.createElement('div');
   el.className = 'le ' + cls;
   el.textContent = `[${new Date().toLocaleTimeString('en',{hour12:false})}] ${msg}`;
   const l = document.getElementById('log');
-  l.appendChild(el);
-  l.scrollTop = l.scrollHeight;
+  l.appendChild(el); l.scrollTop = l.scrollHeight;
   while (l.children.length > 100) l.removeChild(l.firstChild);
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+//  CURVE UI
+// ══════════════════════════════════════════════════════════════════
+function buildCurveUI() {
+  const wrap = document.getElementById('curve-buttons');
+  wrap.innerHTML = '';
+  Object.entries(CURVES).forEach(([key, c]) => {
+    const btn = document.createElement('div');
+    btn.className = 'curve-btn' + (key === activeCurve ? ' active' : '');
+    btn.id = 'cb-' + key;
+    btn.style.color = key === activeCurve ? c.color : '';
+    btn.innerHTML = `<div class="cdot" style="background:${c.color}"></div>
+      <div><div>${c.label}</div><div class="cdesc">${c.desc}</div></div>`;
+    btn.onclick = () => {
+      activeCurve = key;
+      document.querySelectorAll('.curve-btn').forEach(b => {
+        const k = b.id.replace('cb-','');
+        b.classList.toggle('active', k === key);
+        b.style.color = k === key ? CURVES[k].color : '';
+      });
+      drawAttenuationGraph();
+      Object.keys(audioPeers).forEach(updateGain);
+    };
+    wrap.appendChild(btn);
+  });
+}
+
+function drawAttenuationGraph() {
+  const w = attenCanvas.width  = attenCanvas.offsetWidth;
+  const h = attenCanvas.height = attenCanvas.offsetHeight || 80;
+  attenCtx.clearRect(0, 0, w, h);
+
+  // Grid
+  attenCtx.strokeStyle = '#1e293b'; attenCtx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = i * h / 4;
+    attenCtx.beginPath(); attenCtx.moveTo(0,y); attenCtx.lineTo(w,y); attenCtx.stroke();
+  }
+
+  // Curve
+  const c = CURVES[activeCurve];
+  attenCtx.beginPath(); attenCtx.strokeStyle = c.color; attenCtx.lineWidth = 2;
+  for (let px = 0; px < w; px++) {
+    const ratio = px / w;
+    const gain  = CURVES[activeCurve].fn(ratio);
+    const y     = h - gain * h;
+    px === 0 ? attenCtx.moveTo(px, y) : attenCtx.lineTo(px, y);
+  }
+  attenCtx.stroke();
+
+  // Labels
+  attenCtx.fillStyle = '#475569'; attenCtx.font = '9px monospace';
+  attenCtx.textAlign = 'left';  attenCtx.fillText('100%', 2, 10);
+  attenCtx.textAlign = 'left';  attenCtx.fillText('0%',   2, h - 2);
+  attenCtx.textAlign = 'right'; attenCtx.fillText('0px',  w - 2, h - 2);
+  attenCtx.textAlign = 'right'; attenCtx.fillText(`${EARSHOT}px`, w - 2, 10);
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  JOIN
-// ════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
 function joinSpace() {
   if (socket && socket.connected) return;
   myName = nameInput.value.trim() || 'Anonymous';
 
-  const joinBtn = document.querySelector('#join-screen button');
   joinBtn.textContent = '🔌 Connecting...';
   joinBtn.disabled = true;
-  joinMsg.textContent = 'Connecting to server...';
+  joinMsg.textContent = 'Connecting...';
 
-  if (socket) { socket.disconnect(); socket = null; }
+  if (socket) { try { socket.disconnect(); } catch(e){} socket = null; }
 
-  socket = io(window.location.origin, {
-    transports: ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
-    timeout: 10000,
-    extraHeaders: { 'ngrok-skip-browser-warning': 'true' }
+  // Auto-detect server URL — works with localhost AND ngrok
+  const SERVER = window.location.origin;
+
+  socket = io(SERVER, {
+    transports:         ['polling', 'websocket'],  // polling first = always works through proxies
+    upgrade:            true,
+    reconnection:       true,
+    reconnectionAttempts: 10,
+    reconnectionDelay:  2000,
+    timeout:            20000,
+    extraHeaders:       { 'ngrok-skip-browser-warning': 'true' }
   });
 
   socket.on('connect', () => {
@@ -222,41 +292,48 @@ function joinSpace() {
     statusTxt.textContent = `Connected · ${myName}`;
     joinMsg.textContent = '';
     socket.emit('join', { name: myName, x: myX, y: myY });
-    joinScr.style.display = 'none';
-    gameScr.style.display = 'flex';
+    joinScr.style.display  = 'none';
+    gameScr.style.display  = 'flex';
     resizeCanvas();
+    buildCurveUI();
+    drawAttenuationGraph();
     startLoop();
-    log('Connected to ProxiSpeak ✅', 'lg');
+    log('✅ Connected to ProxiSpeak', 'lg');
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', reason => {
     connDot.classList.remove('on');
-    statusTxt.textContent = 'Disconnected — retrying...';
-    log('Disconnected', 'lr');
+    statusTxt.textContent = 'Disconnected — reconnecting...';
+    log(`Disconnected: ${reason}`, 'lr');
   });
 
-  socket.on('connect_error', (err) => {
-    connDot.classList.remove('on');
-    joinMsg.textContent = `❌ Cannot connect: ${err.message}`;
-    log(`Connection error: ${err.message}`, 'lr');
+  socket.on('connect_error', err => {
+    console.error('connect_error', err);
+    log(`❌ Connection error: ${err.message}`, 'lr');
+    joinMsg.textContent = `❌ ${err.message} — retrying...`;
+    // Don't reset UI — socket.io will auto-retry up to reconnectionAttempts
+  });
+
+  socket.on('reconnect_failed', () => {
+    joinMsg.textContent = '❌ Could not connect. Check server is running.';
     joinBtn.textContent = 'Join Space';
     joinBtn.disabled = false;
     joinScr.style.display = 'flex';
     gameScr.style.display = 'none';
-    socket.disconnect(); socket = null;
+    socket = null;
   });
 
-  // ── Socket events ──────────────────────────────────────────────────────
+  // ── Game events ──────────────────────────────────────────────
   socket.on('self:joined', ({ id, color }) => {
     myId = id; myColor = color;
     log(`Joined as "${myName}"`, 'lg');
   });
 
-  socket.on('users:update', (all) => {
+  socket.on('users:update', all => {
     users = {};
     all.forEach(u => { users[u.id] = u; });
     renderUsers();
-    updateStats();
+    renderMeters();
   });
 
   socket.on('user:moved', ({ id, x, y }) => {
@@ -269,22 +346,18 @@ function joinSpace() {
     closePC(id, false);
     delete users[id];
     renderUsers();
-    updateStats();
+    renderMeters();
   });
 
   socket.on('proximity:update', ({ nearbyIds: ids }) => {
     const prev = new Set(nearbyIds);
     const next = new Set(ids);
-
-    // New users in range → start WebRTC
     ids.filter(id => !prev.has(id)).forEach(id => startCall(id));
-    // Users left range → hang up
     nearbyIds.filter(id => !next.has(id)).forEach(id => closePC(id, true));
-
     nearbyIds = ids;
-    proxBanner.style.display = ids.length > 0 ? 'block' : 'none';
+    proxBanner.style.display = ids.length ? 'block' : 'none';
     renderUsers();
-    updateStats();
+    renderMeters();
   });
 
   // WebRTC signaling
@@ -294,23 +367,24 @@ function joinSpace() {
   socket.on('webrtc:hangup',        ({ from })            => closePC(from, false));
 }
 
-nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinSpace(); e.stopPropagation(); });
+nameInput.addEventListener('keydown', e => { if (e.key==='Enter') joinSpace(); e.stopPropagation(); });
 
-// ════════════════════════════════════════════════════════════════════════════
-//  CANVAS + RENDER LOOP
-// ════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+//  CANVAS + LOOP
+// ══════════════════════════════════════════════════════════════════
 function resizeCanvas() {
   const wrap = document.getElementById('canvas-wrap');
   canvas.width  = wrap.clientWidth;
   canvas.height = wrap.clientHeight;
 }
-window.addEventListener('resize', resizeCanvas);
+window.addEventListener('resize', () => { resizeCanvas(); drawAttenuationGraph(); });
 
 function startLoop() { requestAnimationFrame(loop); }
 
 function loop() {
   handleKeys();
   draw();
+  updateMeterBars();
   requestAnimationFrame(loop);
 }
 
@@ -320,28 +394,40 @@ function draw() {
 
   // Grid
   ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
-  for (let x = 0; x <= w; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-  for (let y = 0; y <= h; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  for (let x=0; x<=w; x+=40){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+  for (let y=0; y<=h; y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
 
-  // Earshot circle
+  // Earshot ring
   if (myId) {
     ctx.beginPath(); ctx.arc(myX, myY, EARSHOT, 0, Math.PI*2);
-    ctx.strokeStyle = 'rgba(79,70,229,0.3)'; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(79,70,229,0.25)'; ctx.lineWidth = 1.5;
     ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle = 'rgba(79,70,229,0.05)'; ctx.fill();
   }
 
-  // Connection lines
+  // Connection lines with gain-based opacity
   nearbyIds.forEach(id => {
     const u = users[id]; if (!u) return;
     const dist = Math.sqrt((u.x-myX)**2 + (u.y-myY)**2);
-    const alpha = Math.max(0, 1 - dist / EARSHOT);
+    const gain = calculateGain(dist);
+    const col  = CURVES[activeCurve].color;
     ctx.beginPath(); ctx.moveTo(myX, myY); ctx.lineTo(u.x, u.y);
-    ctx.strokeStyle = `rgba(99,102,241,${alpha.toFixed(2)})`;
+    ctx.strokeStyle = col + Math.round(gain*255).toString(16).padStart(2,'0');
     ctx.lineWidth = 2; ctx.stroke();
+
+    // dB label
+    if (peerConns[id]) {
+      const db  = toDb(gain);
+      const mx  = (myX+u.x)/2, my2 = (myY+u.y)/2 - 12;
+      const lbl = isFinite(db) ? `${db.toFixed(1)}dB` : '-∞dB';
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(mx-22, my2-7, 44, 14);
+      ctx.fillStyle = col; ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(lbl, mx, my2);
+    }
   });
 
-  // Avatars
   Object.values(users).forEach(u => drawAvatar(u));
 }
 
@@ -351,8 +437,8 @@ function drawAvatar(u) {
   const isRTC    = !!peerConns[u.id];
   const c        = u.color || '#4F46E5';
 
-  if (isRTC)    { ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R+8,0,Math.PI*2); ctx.fillStyle='rgba(99,102,241,0.15)'; ctx.fill(); }
-  else if (isNearby){ ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R+5,0,Math.PI*2); ctx.fillStyle='rgba(16,185,129,0.12)'; ctx.fill(); }
+  if (isRTC)     { ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R+8,0,Math.PI*2); ctx.fillStyle='rgba(99,102,241,0.15)'; ctx.fill(); }
+  else if(isNearby){ ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R+5,0,Math.PI*2); ctx.fillStyle='rgba(16,185,129,0.12)'; ctx.fill(); }
 
   ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R,0,Math.PI*2); ctx.fillStyle=c; ctx.fill();
   if (isMe) { ctx.beginPath(); ctx.arc(u.x,u.y,AVATAR_R+3,0,Math.PI*2); ctx.strokeStyle='white'; ctx.lineWidth=2; ctx.stroke(); }
@@ -360,90 +446,78 @@ function drawAvatar(u) {
   ctx.fillStyle='white'; ctx.font=`bold ${AVATAR_R}px Segoe UI`;
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText((u.name||'?')[0].toUpperCase(), u.x, u.y);
-  ctx.fillStyle=isMe?'white':'#94a3b8';
-  ctx.font=isMe?'bold 11px Segoe UI':'11px Segoe UI';
+  ctx.fillStyle=isMe?'white':'#94a3b8'; ctx.font=isMe?'bold 11px Segoe UI':'11px Segoe UI';
   ctx.textAlign='center'; ctx.textBaseline='top';
   ctx.fillText(u.name+(isMe?' (you)':''), u.x, u.y+AVATAR_R+4);
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
 //  MOVEMENT
-// ════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
 canvas.addEventListener('click', e => {
   const r = canvas.getBoundingClientRect();
   moveTo(e.clientX - r.left, e.clientY - r.top);
 });
-
-document.addEventListener('keydown', e => { keysDown[e.key] = true; });
-document.addEventListener('keyup',   e => { keysDown[e.key] = false; });
+document.addEventListener('keydown', e => { keysDown[e.key]=true; });
+document.addEventListener('keyup',   e => { keysDown[e.key]=false; });
 
 function handleKeys() {
   if (!myId) return;
-  let dx = 0, dy = 0;
+  let dx=0, dy=0;
   if (keysDown['ArrowLeft']  || keysDown['a'] || keysDown['A']) dx -= MOVE_SPEED;
   if (keysDown['ArrowRight'] || keysDown['d'] || keysDown['D']) dx += MOVE_SPEED;
   if (keysDown['ArrowUp']    || keysDown['w'] || keysDown['W']) dy -= MOVE_SPEED;
   if (keysDown['ArrowDown']  || keysDown['s'] || keysDown['S']) dy += MOVE_SPEED;
-  if (dx !== 0 || dy !== 0) {
-    myX = Math.max(AVATAR_R, Math.min(canvas.width  - AVATAR_R, myX + dx));
-    myY = Math.max(AVATAR_R, Math.min(canvas.height - AVATAR_R, myY + dy));
-    emitMove();
-  }
+  if (dx||dy) { moveTo(myX+dx, myY+dy); }
 }
 
 function moveTo(x, y) {
-  myX = Math.max(AVATAR_R, Math.min(canvas.width  - AVATAR_R, x));
-  myY = Math.max(AVATAR_R, Math.min(canvas.height - AVATAR_R, y));
+  myX = Math.max(AVATAR_R, Math.min(canvas.width -AVATAR_R, x));
+  myY = Math.max(AVATAR_R, Math.min(canvas.height-AVATAR_R, y));
   emitMove();
 }
 
 function emitMove() {
   const now = Date.now();
-  if (!socket || !myId || now - lastEmit < THROTTLE) return;
+  if (!socket || !myId || now-lastEmit < THROTTLE) return;
   lastEmit = now;
   socket.emit('move', { x: myX, y: myY });
-  if (users[myId]) { users[myId].x = myX; users[myId].y = myY; }
+  if (users[myId]) { users[myId].x=myX; users[myId].y=myY; }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
 //  MICROPHONE
-// ════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
 async function toggleMic() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') await audioCtx.resume();
 
   if (!micEnabled) {
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:false });
       micEnabled = true;
-      micBtn.textContent = '🎤 Mic ON';
-      micBtn.classList.add('active');
+      micBtn.textContent = '🎤 Mic ON'; micBtn.classList.add('active');
       log('Microphone enabled', 'lg');
-      // Reconnect any existing peers with the new stream
       Object.keys(peerConns).forEach(id => closePC(id, true));
       nearbyIds.forEach(id => startCall(id));
-    } catch (e) {
-      log(`Mic error: ${e.message}`, 'lr');
-    }
+    } catch(e) { log(`Mic error: ${e.message}`, 'lr'); }
   } else {
     localStream?.getTracks().forEach(t => t.stop());
-    localStream = null;
-    micEnabled = false;
-    micBtn.textContent = '🎤 Mic OFF';
-    micBtn.classList.remove('active');
+    localStream = null; micEnabled = false;
+    micBtn.textContent = '🎤 Mic OFF'; micBtn.classList.remove('active');
     log('Microphone disabled', 'ly');
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  WebRTC
-// ════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+//  WebRTC  (Week 2)
+// ══════════════════════════════════════════════════════════════════
 function startCall(peerId) {
-  if (peerConns[peerId] || myId > peerId) return; // only initiator creates offer
+  if (peerConns[peerId] || !myId || myId > peerId) return;
   const pc = createPC(peerId);
   if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
   pc.createOffer()
-    .then(offer => pc.setLocalDescription(offer))
+    .then(o => pc.setLocalDescription(o))
     .then(() => socket.emit('webrtc:offer', { targetId: peerId, offer: pc.localDescription }))
     .catch(e => log(`Offer error: ${e.message}`, 'lr'));
 }
@@ -452,19 +526,19 @@ async function handleOffer(from, offer) {
   const pc = createPC(from);
   if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
   await pc.setRemoteDescription(new RTCSessionDescription(offer));
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
+  const ans = await pc.createAnswer();
+  await pc.setLocalDescription(ans);
   socket.emit('webrtc:answer', { targetId: from, answer: pc.localDescription });
 }
 
 async function handleAnswer(from, answer) {
   const pc = peerConns[from];
-  if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+  if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer)).catch(()=>{});
 }
 
 async function handleICE(from, candidate) {
   const pc = peerConns[from];
-  if (pc) await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+  if (pc && candidate) await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(()=>{});
 }
 
 function createPC(peerId) {
@@ -476,9 +550,8 @@ function createPC(peerId) {
   };
 
   pc.ontrack = e => {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const stream = e.streams[0];
-    const source = audioCtx.createMediaStreamSource(stream);
+    if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const source = audioCtx.createMediaStreamSource(e.streams[0]);
     const gain   = audioCtx.createGain();
     source.connect(gain); gain.connect(audioCtx.destination);
     audioPeers[peerId] = { source, gain };
@@ -489,36 +562,29 @@ function createPC(peerId) {
   pc.onconnectionstatechange = () => {
     if (['failed','disconnected','closed'].includes(pc.connectionState)) closePC(peerId, false);
   };
-
   return pc;
 }
 
 function closePC(peerId, sendHangup) {
-  const pc = peerConns[peerId];
-  if (!pc) return;
-  pc.close();
-  delete peerConns[peerId];
-  if (audioPeers[peerId]) {
-    audioPeers[peerId].source?.disconnect();
-    audioPeers[peerId].gain?.disconnect();
-    delete audioPeers[peerId];
-  }
+  const pc = peerConns[peerId]; if (!pc) return;
+  pc.close(); delete peerConns[peerId];
+  const ap = audioPeers[peerId];
+  if (ap) { ap.source?.disconnect(); ap.gain?.disconnect(); delete audioPeers[peerId]; }
   if (sendHangup && socket) socket.emit('webrtc:hangup', { targetId: peerId });
 }
 
-// Volume fades linearly with distance (0 at edge, 1 at center)
+// Volume via active attenuation curve  (Week 3)
 function updateGain(peerId) {
-  const peer = audioPeers[peerId];
-  const u    = users[peerId];
-  if (!peer || !u) return;
-  const dist  = Math.sqrt((u.x - myX)**2 + (u.y - myY)**2);
-  const gain  = Math.max(0, 1 - dist / EARSHOT);
-  peer.gain.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.05);
+  const ap = audioPeers[peerId], u = users[peerId];
+  if (!ap || !u) return;
+  const dist = Math.sqrt((u.x-myX)**2 + (u.y-myY)**2);
+  const gain = calculateGain(dist);
+  ap.gain.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.05);
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  SIDEBAR UI
-// ════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+//  SIDEBAR
+// ══════════════════════════════════════════════════════════════════
 function renderUsers() {
   const ul = document.getElementById('user-list');
   ul.innerHTML = '';
@@ -528,23 +594,46 @@ function renderUsers() {
     const isRTC  = !!peerConns[u.id];
     const div    = document.createElement('div');
     div.className = 'user-item';
-    div.innerHTML = `
-      <div class="udot" style="background:${u.color||'#4F46E5'}"></div>
+    div.innerHTML = `<div class="udot" style="background:${u.color||'#4F46E5'}"></div>
       <span class="uname">${u.name}${isMe?' (you)':''}</span>
       ${isRTC  ? '<span class="badge rtc">🔊 RTC</span>'  : ''}
-      ${isNear && !isRTC ? '<span class="badge near">📡</span>' : ''}`;
+      ${isNear&&!isRTC ? '<span class="badge near">📡</span>' : ''}`;
     ul.appendChild(div);
   });
 }
 
-function updateStats() {
-  const total = Object.keys(users).length;
-  const rtc   = Object.keys(peerConns).length;
-  document.getElementById('stats').innerHTML = `
-    Users online: <b>${total}</b><br>
-    Nearby: <b>${nearbyIds.length}</b><br>
-    Active calls: <b>${rtc}</b><br>
-    Earshot radius: <b>${EARSHOT}px</b>`;
+function renderMeters() {
+  const el = document.getElementById('meters');
+  if (!nearbyIds.length) { el.innerHTML='<span style="font-size:10px;color:#334155">No nearby users</span>'; return; }
+  el.innerHTML = '';
+  nearbyIds.forEach(id => {
+    const u = users[id]; if (!u) return;
+    const dist = Math.sqrt((u.x-myX)**2+(u.y-myY)**2);
+    const gain = calculateGain(dist);
+    const pct  = Math.round(gain*100);
+    const db   = toDb(gain);
+    const dbStr= isFinite(db) ? db.toFixed(1)+'dB' : '-∞';
+    const barColor = pct>60 ? '#10b981' : pct>30 ? '#f59e0b' : '#60a5fa';
+    el.innerHTML += `<div class="meter-row">
+      <span class="mlabel">${u.name}</span>
+      <div class="mbar-bg"><div class="mbar" id="mb-${id}" style="width:${pct}%;background:${barColor}"></div></div>
+      <span class="mdb" id="md-${id}">${dbStr}</span>
+    </div>`;
+  });
+}
+
+function updateMeterBars() {
+  nearbyIds.forEach(id => {
+    const u = users[id]; if (!u) return;
+    const dist  = Math.sqrt((u.x-myX)**2+(u.y-myY)**2);
+    const gain  = calculateGain(dist);
+    const pct   = Math.round(gain*100);
+    const db    = toDb(gain);
+    const bar   = document.getElementById('mb-'+id);
+    const dbEl  = document.getElementById('md-'+id);
+    if (bar) { bar.style.width=pct+'%'; bar.style.background=pct>60?'#10b981':pct>30?'#f59e0b':'#60a5fa'; }
+    if (dbEl) dbEl.textContent = isFinite(db) ? db.toFixed(1)+'dB' : '-∞';
+  });
 }
 </script>
 </body>
