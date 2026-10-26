@@ -1,9 +1,7 @@
 /**
- * ProxiSpeak — Server (Week 4)
- * Week 1: Real-time position sync via Socket.io + MongoDB
- * Week 2: WebRTC peer-to-peer audio via proximity signaling
- * Week 3: Dynamic audio attenuation curves + Redis-ready scaling
- * Week 4: Named room persistence + 60 FPS smooth movement
+ * ProxiSpeak — Server
+ * Real-time proximity audio ecosystem
+ * Features: Socket.io rooms · WebRTC audio · MongoDB persistence · Dynamic attenuation
  */
 
 require('dotenv').config();
@@ -218,7 +216,7 @@ attachSignaling(io);
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, '0.0.0.0', () => {
   console.log('');
-  console.log('🚀 ProxiSpeak Week 4 server running!');
+  console.log('🚀 ProxiSpeak server running!');
   console.log(`   Instance: ${INSTANCE_ID}`);
   console.log(`   Local:    http://localhost:${PORT}`);
   console.log(`   Health:   http://localhost:${PORT}/health`);

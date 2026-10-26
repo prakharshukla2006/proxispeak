@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ProxiSpeak — Week 4</title>
+  <title>ProxiSpeak — Virtual Office</title>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0;}
@@ -24,9 +24,9 @@
 
     /* Join Screen */
     #join-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:0;}
-    .join-card{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:32px;width:420px;display:flex;flex-direction:column;gap:16px;}
-    .join-card h2{font-size:22px;font-weight:700;color:#a5b4fc;text-align:center;}
-    .join-card p{font-size:12px;color:#64748b;text-align:center;line-height:1.6;}
+    .join-card{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:36px 32px;width:440px;display:flex;flex-direction:column;gap:18px;box-shadow:0 25px 50px rgba(0,0,0,0.5);}
+    .join-card h2{font-size:26px;font-weight:800;color:#a5b4fc;text-align:center;letter-spacing:-0.5px;}
+    .join-card p{font-size:13px;color:#64748b;text-align:center;line-height:1.6;}
     .field-label{font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
     .field-input{width:100%;padding:10px 14px;border-radius:8px;border:1px solid #475569;background:#0f172a;color:white;font-size:14px;outline:none;transition:border-color .2s;}
     .field-input:focus{border-color:#4f46e5;}
@@ -107,8 +107,13 @@
 <!-- Join Screen -->
 <div id="join-screen">
   <div class="join-card">
-    <h2>🎙️ ProxiSpeak</h2>
-    <p>Week 4 · Named Rooms · 60 FPS · Proximity Audio</p>
+    <div style="text-align:center;">
+      <div style="font-size:36px;margin-bottom:6px;">🎙️</div>
+      <h2>ProxiSpeak</h2>
+      <p>Move your avatar close to others to automatically<br>start a proximity-based voice call</p>
+    </div>
+
+    <div style="height:1px;background:#334155;margin:4px 0;"></div>
 
     <div>
       <div class="field-label">Your Name</div>
@@ -117,7 +122,7 @@
 
     <div>
       <div class="field-label">Room</div>
-      <input class="field-input" id="room-input" type="text" placeholder="Room name (e.g. Design, Dev, General)" maxlength="30"/>
+      <input class="field-input" id="room-input" type="text" placeholder="e.g.  General, Design, Dev..." maxlength="30"/>
     </div>
 
     <div id="room-list-wrap">
@@ -127,6 +132,10 @@
 
     <button id="join-btn" onclick="joinSpace()">Join Space</button>
     <span id="join-msg"></span>
+
+    <div style="text-align:center;font-size:10px;color:#334155;margin-top:-6px;">
+      Proximity Audio · Named Rooms · WebRTC · Real-time
+    </div>
   </div>
 </div>
 
