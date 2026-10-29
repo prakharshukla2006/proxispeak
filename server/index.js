@@ -1,7 +1,10 @@
 /**
  * ProxiSpeak — Server
  * Real-time proximity audio ecosystem
- * Features: Socket.io rooms · WebRTC audio · MongoDB persistence · Dynamic attenuation
+ * Week 1: Socket.io position sync + MongoDB persistence
+ * Week 2: WebRTC peer-to-peer audio signaling
+ * Week 3: Dynamic audio attenuation + Redis-ready scaling
+ * Week 4: Named rooms + room persistence + 60 FPS support
  */
 
 require('dotenv').config();
@@ -41,8 +44,8 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, '../client/public')));
 
-// ─── In-memory state (per room) ──────────────────────────────────────────────
-// rooms → { roomName → { socketId → { id, name, x, y, color } } }
+// ─── In-memory state ──────────────────────────────────────────────────────────
+// roomUsers: { roomName → { socketId → { id, name, x, y, color, room } } }
 const roomUsers = {};
 
 const COLORS     = ['#4F46E5','#EF4444','#10B981','#F59E0B','#EC4899','#06B6D4','#8B5CF6','#F97316'];
@@ -78,31 +81,25 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Get all active rooms with user counts
 app.get('/api/rooms', async (req, res) => {
   try {
-    // Merge persisted rooms from MongoDB with live user counts
     const persisted = await Room.find().sort({ lastActive: -1 }).limit(20);
     const rooms = persisted.map(r => ({
-      name:      r.name,
-      users:     Object.keys(getRoomUsers(r.name)).length,
-      maxUsers:  r.maxUsers,
-      lastActive:r.lastActive
+      name:       r.name,
+      users:      Object.keys(getRoomUsers(r.name)).length,
+      maxUsers:   r.maxUsers,
+      lastActive: r.lastActive
     }));
-
-    // Add in-memory only rooms (not yet persisted)
+    // Add live rooms not yet persisted
     Object.keys(roomUsers).forEach(name => {
-      if (!rooms.find(r => r.name === name)) {
+      if (!rooms.find(r => r.name === name))
         rooms.push({ name, users: Object.keys(roomUsers[name]).length, maxUsers: 20 });
-      }
     });
-
-    res.json(rooms);
+    res.json(rooms.filter(r => r.users > 0)); // only show rooms with active users
   } catch (e) {
-    // Fallback: in-memory only
-    const rooms = Object.entries(roomUsers).map(([name, u]) => ({
-      name, users: Object.keys(u).length, maxUsers: 20
-    }));
+    const rooms = Object.entries(roomUsers)
+      .filter(([, u]) => Object.keys(u).length > 0)
+      .map(([name, u]) => ({ name, users: Object.keys(u).length, maxUsers: 20 }));
     res.json(rooms);
   }
 });
@@ -113,14 +110,10 @@ app.get('/api/rooms/:name/users', (req, res) => {
 
 app.get('/api/metrics', (req, res) => {
   const totalUsers = Object.values(roomUsers).reduce((s, r) => s + Object.keys(r).length, 0);
-  res.json({
-    instance:  INSTANCE_ID,
-    rooms:     Object.keys(roomUsers).length,
-    users:     totalUsers
-  });
+  res.json({ instance: INSTANCE_ID, rooms: Object.keys(roomUsers).length, users: totalUsers });
 });
 
-// ─── Redis (optional) ─────────────────────────────────────────────────────────
+// ─── Redis (optional — graceful fallback) ─────────────────────────────────────
 if (process.env.REDIS_URL) {
   try {
     const { createClient } = require('redis');
@@ -130,82 +123,96 @@ if (process.env.REDIS_URL) {
       .catch(() => console.log('ℹ Redis unavailable — single-instance mode'));
   } catch (e) {}
 } else {
-  console.log('ℹ Redis not configured — single-instance mode');
+  console.log('ℹ Single-instance mode (no REDIS_URL)');
 }
 
-// ─── Socket.io ────────────────────────────────────────────────────────────────
+// ─── Socket.io Events ─────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
   console.log(`🔌 Connected: ${socket.id}`);
   let currentRoom = null;
 
-  // ── Join a room ──────────────────────────────────────────────────────────
+  // ── Join ──────────────────────────────────────────────────────────────────
   socket.on('join', async ({ name, room, x, y }) => {
     const roomName = (room || 'General').trim() || 'General';
     const color    = COLORS[colorIndex++ % COLORS.length];
-    const userData = {
-      id: socket.id,
-      name: name || 'Anonymous',
-      x: x || 450,
-      y: y || 300,
-      color,
-      room: roomName
-    };
+    const spawnX   = x || Math.floor(Math.random() * 600) + 200; // random spawn
+    const spawnY   = y || Math.floor(Math.random() * 400) + 100;
+
+    const userData = { id: socket.id, name: name || 'Anonymous', x: spawnX, y: spawnY, color, room: roomName };
 
     currentRoom = roomName;
-    socket.join(roomName);   // Socket.io room
+    socket.join(roomName);
     getRoomUsers(roomName)[socket.id] = userData;
 
-    // Persist room to MongoDB
+    // Persist room + user to MongoDB
     Room.findOneAndUpdate(
       { name: roomName },
       { name: roomName, lastActive: new Date() },
       { upsert: true, new: true }
     ).catch(() => {});
 
-    // Persist user to MongoDB
     User.findOneAndUpdate(
       { socketId: socket.id },
-      { socketId: socket.id, name: userData.name, color, x: userData.x, y: userData.y, room: roomName, updatedAt: new Date() },
+      { socketId: socket.id, name: userData.name, color, x: spawnX, y: spawnY, room: roomName, updatedAt: new Date() },
       { upsert: true, new: true }
     ).catch(() => {});
 
-    socket.emit('self:joined', { id: socket.id, color, room: roomName });
-    // Send all users in this room
+    // Tell the joining user who they are
+    socket.emit('self:joined', { id: socket.id, color, room: roomName, x: spawnX, y: spawnY });
+
+    // Send full user list to everyone in room
     io.to(roomName).emit('users:update', Object.values(getRoomUsers(roomName)));
-    console.log(`👤 ${userData.name} joined room "${roomName}"`);
+
+    // ✅ FIX: Immediately send proximity state to the new user (no need to move first)
+    const nearbyIds = findNearby(roomName, spawnX, spawnY, socket.id);
+    if (nearbyIds.length > 0) {
+      socket.emit('proximity:update', { nearbyIds, radius: EARSHOT_PX });
+    }
+
+    // ✅ FIX: Also update proximity for existing users who may now be near the new user
+    Object.values(getRoomUsers(roomName)).forEach(existingUser => {
+      if (existingUser.id === socket.id) return;
+      const existingSocket = io.sockets.sockets.get(existingUser.id);
+      if (!existingSocket) return;
+      const nearbyForExisting = findNearby(roomName, existingUser.x, existingUser.y, existingUser.id);
+      existingSocket.emit('proximity:update', { nearbyIds: nearbyForExisting, radius: EARSHOT_PX });
+    });
+
+    console.log(`👤 ${userData.name} joined room "${roomName}" at (${Math.round(spawnX)}, ${Math.round(spawnY)})`);
   });
 
-  // ── Move ─────────────────────────────────────────────────────────────────
+  // ── Move ──────────────────────────────────────────────────────────────────
   socket.on('move', ({ x, y }) => {
     if (!currentRoom || !getRoomUsers(currentRoom)[socket.id]) return;
     getRoomUsers(currentRoom)[socket.id].x = x;
     getRoomUsers(currentRoom)[socket.id].y = y;
 
-    User.findOneAndUpdate({ socketId: socket.id }, { x, y, updatedAt: new Date() }).catch(() => {});
-
-    // Broadcast to same room only
+    // Broadcast position to same room
     socket.to(currentRoom).emit('user:moved', { id: socket.id, x, y });
 
+    // Update MongoDB (non-blocking)
+    User.findOneAndUpdate({ socketId: socket.id }, { x, y, updatedAt: new Date() }).catch(() => {});
+
+    // Proximity check
     const nearbyIds = findNearby(currentRoom, x, y, socket.id);
     socket.emit('proximity:update', { nearbyIds, radius: EARSHOT_PX });
   });
 
-  // ── Disconnect ───────────────────────────────────────────────────────────
+  // ── Disconnect ────────────────────────────────────────────────────────────
   socket.on('disconnect', () => {
-    if (currentRoom) {
-      const user = getRoomUsers(currentRoom)[socket.id];
-      console.log(`❌ ${user?.name || socket.id} left room "${currentRoom}"`);
-      delete getRoomUsers(currentRoom)[socket.id];
+    if (!currentRoom) return;
+    const user = getRoomUsers(currentRoom)[socket.id];
+    console.log(`❌ ${user?.name || socket.id} left room "${currentRoom}"`);
+    delete getRoomUsers(currentRoom)[socket.id];
 
-      // Clean up empty rooms from memory
-      if (Object.keys(getRoomUsers(currentRoom)).length === 0) {
-        delete roomUsers[currentRoom];
-      }
-
-      User.deleteOne({ socketId: socket.id }).catch(() => {});
-      io.to(currentRoom).emit('user:left',    { id: socket.id });
-      io.to(currentRoom).emit('users:update', Object.values(getRoomUsers(currentRoom) || {}));
+    // Clean up empty rooms
+    if (Object.keys(getRoomUsers(currentRoom)).length === 0) {
+      delete roomUsers[currentRoom];
     }
+
+    User.deleteOne({ socketId: socket.id }).catch(() => {});
+    io.to(currentRoom).emit('user:left',    { id: socket.id });
+    io.to(currentRoom).emit('users:update', Object.values(getRoomUsers(currentRoom) || {}));
   });
 });
 

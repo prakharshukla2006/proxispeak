@@ -202,7 +202,7 @@ let peerConns = {};
 let localStream=null, audioCtx=null, audioPeers={};
 let micEnabled=false, keysDown={}, lastEmit=0;
 
-// 60 FPS tracking (Week 4)
+// 60 FPS tracking
 let lastFrameTime=0, frameCount=0, fps=0, fpsTimer=0;
 
 // ══════════════════════════════════════════════════════════════════
@@ -332,6 +332,7 @@ function joinSpace(){
     connDot.classList.add('on');
     statusTxt.textContent=`Connected · ${myName}`;
     joinMsg.textContent='';
+    // Send join — server will assign spawn position and send it back via self:joined
     socket.emit('join',{name:myName, room:myRoom, x:myX, y:myY});
     joinScr.style.display='none';
     gameScr.style.display='flex';
@@ -360,8 +361,12 @@ function joinSpace(){
   });
 
   // ── events ──────────────────────────────────────────────────────
-  socket.on('self:joined',({id,color,room})=>{
+  socket.on('self:joined',({id, color, room, x, y})=>{
     myId=id; myColor=color; myRoom=room;
+    // ✅ FIX: Use server-assigned spawn position
+    if(x) myX=x;
+    if(y) myY=y;
+    if(users[myId]){ users[myId].x=myX; users[myId].y=myY; users[myId].tx=myX; users[myId].ty=myY; }
     log(`Joined as "${myName}" in room "${room}"`, 'lg');
   });
 
