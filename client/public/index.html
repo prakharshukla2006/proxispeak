@@ -225,6 +225,8 @@ const joinMsg     = document.getElementById('join-msg');
 const roomBadge   = document.getElementById('room-badge');
 const leaveBtn    = document.getElementById('leave-btn');
 
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
 // ══════════════════════════════════════════════════════════════════
 //  LOG
 // ══════════════════════════════════════════════════════════════════
@@ -253,7 +255,7 @@ async function loadRooms(){
     rooms.forEach(r => {
       const chip = document.createElement('div');
       chip.className = 'room-chip';
-      chip.innerHTML = `${r.name} <span class="rc-count">${r.users}</span>`;
+      chip.innerHTML = `${esc(r.name)} <span class="rc-count">${r.users}</span>`;
       chip.onclick   = () => { roomInput.value = r.name; };
       wrap.appendChild(chip);
     });
@@ -313,6 +315,7 @@ function drawAttenuationGraph(){
 // ══════════════════════════════════════════════════════════════════
 function joinSpace(){
   if(socket&&socket.connected) return;
+  ensureAudioCtx();
   myName = nameInput.value.trim() || 'Anonymous';
   myRoom = roomInput.value.trim() || 'General';
 
@@ -412,7 +415,7 @@ function joinSpace(){
 function leaveRoom(){
   if(socket){ socket.disconnect(); socket=null; }
   Object.keys(peerConns).forEach(id=>closePC(id,false));
-  users={}; nearbyIds=[];
+  users={}; nearbyIds=[]; myId=null;
   gameScr.style.display='none'; joinScr.style.display='flex';
   leaveBtn.style.display='none'; roomBadge.style.display='none';
   connDot.classList.remove('on');
@@ -451,6 +454,7 @@ function loop(now){
   lerpRemoteAvatars(dt);  // 60 FPS smooth movement (Week 4)
   draw();
   updateMeterBars();
+  updateAllGains();
   requestAnimationFrame(loop);
 }
 
@@ -546,20 +550,36 @@ function moveTo(x,y){
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  MICROPHONE
+//  AUDIO CONTEXT + MICROPHONE
 // ══════════════════════════════════════════════════════════════════
-async function toggleMic(){
+function ensureAudioCtx(){
   if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-  if(audioCtx.state==='suspended') await audioCtx.resume();
+  if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+  return audioCtx;
+}
+
+async function toggleMic(){
+  ensureAudioCtx();
   if(!micEnabled){
     try{
-      localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+      localStream=await navigator.mediaDevices.getUserMedia({
+        audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
       micEnabled=true; micBtn.textContent='🎤 Mic ON'; micBtn.classList.add('active');
       log('Microphone enabled','lg');
-      Object.keys(peerConns).forEach(id=>closePC(id,true));
-      nearbyIds.forEach(id=>startCall(id));
-    }catch(e){log(`Mic error: ${e.message}`,'lr');}
+      // Swap the track into every live call — no renegotiation needed
+      const track=localStream.getAudioTracks()[0];
+      Object.values(peerConns).forEach(pc=>{
+        const s=pc.getSenders().find(s=>s.track===null||s.track?.kind==='audio');
+        if(s) s.replaceTrack(track).catch(()=>{});
+      });
+    }catch(e){
+      log(`Mic error: ${e.message}`+(location.protocol==='http:'&&location.hostname!=='localhost'?' (mic needs HTTPS or localhost)':''),'lr');
+    }
   }else{
+    Object.values(peerConns).forEach(pc=>{
+      const s=pc.getSenders().find(s=>s.track?.kind==='audio');
+      if(s) s.replaceTrack(null).catch(()=>{});
+    });
     localStream?.getTracks().forEach(t=>t.stop());
     localStream=null; micEnabled=false;
     micBtn.textContent='🎤 Mic OFF'; micBtn.classList.remove('active');
@@ -568,57 +588,108 @@ async function toggleMic(){
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  WebRTC (Week 2)
+//  WebRTC — the lower socket id is the caller (avoids offer glare)
 // ══════════════════════════════════════════════════════════════════
-function startCall(peerId){
+const pendingICE = {};   // peerId → candidates received before remote description
+
+function attachLocalAudio(pc, tr){
+  tr.direction='sendrecv';               // always send+receive, even with mic off
+  const track=localStream?.getAudioTracks()[0]||null;
+  tr.sender.replaceTrack(track).catch(()=>{});
+}
+
+async function startCall(peerId){
   if(peerConns[peerId]||!myId||myId>peerId) return;
   const pc=createPC(peerId);
-  if(localStream) localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
-  pc.createOffer().then(o=>pc.setLocalDescription(o))
-    .then(()=>socket.emit('webrtc:offer',{targetId:peerId,offer:pc.localDescription}))
-    .catch(e=>log(`Offer error: ${e.message}`,'lr'));
+  const tr=pc.addTransceiver('audio',{direction:'sendrecv'});
+  attachLocalAudio(pc,tr);
+  try{
+    await pc.setLocalDescription(await pc.createOffer());
+    socket.emit('webrtc:offer',{targetId:peerId,offer:pc.localDescription});
+  }catch(e){ log(`Offer error: ${e.message}`,'lr'); }
 }
+
 async function handleOffer(from,offer){
+  if(!from||!offer) return;
+  if(peerConns[from]) closePC(from,false);
   const pc=createPC(from);
-  if(localStream) localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
-  await pc.setRemoteDescription(new RTCSessionDescription(offer));
-  const ans=await pc.createAnswer();
-  await pc.setLocalDescription(ans);
-  socket.emit('webrtc:answer',{targetId:from,answer:pc.localDescription});
+  try{
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const tr=pc.getTransceivers().find(t=>t.receiver.track.kind==='audio');
+    if(tr) attachLocalAudio(pc,tr);
+    await pc.setLocalDescription(await pc.createAnswer());
+    socket.emit('webrtc:answer',{targetId:from,answer:pc.localDescription});
+    await flushICE(from);
+  }catch(e){ log(`Answer error: ${e.message}`,'lr'); }
 }
-async function handleAnswer(from,answer){const pc=peerConns[from];if(pc)await pc.setRemoteDescription(new RTCSessionDescription(answer)).catch(()=>{});}
-async function handleICE(from,candidate){const pc=peerConns[from];if(pc&&candidate)await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(()=>{});}
+
+async function handleAnswer(from,answer){
+  const pc=peerConns[from];
+  if(!pc||!answer) return;
+  try{ await pc.setRemoteDescription(new RTCSessionDescription(answer)); await flushICE(from); }
+  catch(e){ log(`Answer apply error: ${e.message}`,'lr'); }
+}
+
+async function handleICE(from,candidate){
+  const pc=peerConns[from];
+  if(!candidate) return;
+  if(!pc||!pc.remoteDescription){ (pendingICE[from]??=[]).push(candidate); return; }
+  try{ await pc.addIceCandidate(new RTCIceCandidate(candidate)); }catch(e){}
+}
+
+async function flushICE(peerId){
+  const pc=peerConns[peerId], q=pendingICE[peerId]||[];
+  delete pendingICE[peerId];
+  for(const c of q){ try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){} }
+}
 
 function createPC(peerId){
   const pc=new RTCPeerConnection(ICE_CFG);
   peerConns[peerId]=pc;
-  pc.onicecandidate=e=>{if(e.candidate)socket.emit('webrtc:ice-candidate',{targetId:peerId,candidate:e.candidate});};
+  pc.onicecandidate=e=>{ if(e.candidate&&socket) socket.emit('webrtc:ice-candidate',{targetId:peerId,candidate:e.candidate}); };
   pc.ontrack=e=>{
-    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    const src=audioCtx.createMediaStreamSource(e.streams[0]);
+    const stream=e.streams[0]||new MediaStream([e.track]);
+    ensureAudioCtx();
+    // Chrome only delivers remote audio to Web Audio if the stream is also attached to a media element
+    const el=document.createElement('audio');
+    el.srcObject=stream; el.muted=true; el.autoplay=true;
+    el.play?.().catch(()=>{});
+    const src=audioCtx.createMediaStreamSource(stream);
     const gain=audioCtx.createGain();
-    src.connect(gain);gain.connect(audioCtx.destination);
-    audioPeers[peerId]={source:src,gain};
+    gain.gain.value=0;
+    src.connect(gain); gain.connect(audioCtx.destination);
+    audioPeers[peerId]={source:src,gain,el};
     updateGain(peerId);
     log(`🔊 Audio from ${users[peerId]?.name||peerId.slice(0,8)}`,'lg');
+    renderUsers();
   };
-  pc.onconnectionstatechange=()=>{if(['failed','disconnected','closed'].includes(pc.connectionState))closePC(peerId,false);};
+  pc.onconnectionstatechange=()=>{
+    if(pc.connectionState==='connected') { log(`🔗 Connected to ${users[peerId]?.name||peerId.slice(0,6)}`,'lg'); renderUsers(); }
+    if(['failed','closed'].includes(pc.connectionState)) closePC(peerId,false);
+    if(pc.connectionState==='disconnected') setTimeout(()=>{ if(peerConns[peerId]===pc&&pc.connectionState==='disconnected') closePC(peerId,false); },4000);
+  };
   return pc;
 }
 
 function closePC(peerId,sendHangup){
-  const pc=peerConns[peerId]; if(!pc)return;
-  pc.close(); delete peerConns[peerId];
+  const pc=peerConns[peerId]; if(!pc) return;
+  delete peerConns[peerId]; delete pendingICE[peerId];
+  pc.onconnectionstatechange=null; pc.close();
   const ap=audioPeers[peerId];
-  if(ap){ap.source?.disconnect();ap.gain?.disconnect();delete audioPeers[peerId];}
-  if(sendHangup&&socket)socket.emit('webrtc:hangup',{targetId:peerId});
+  if(ap){ ap.source?.disconnect(); ap.gain?.disconnect(); if(ap.el){ap.el.srcObject=null;} delete audioPeers[peerId]; }
+  if(sendHangup&&socket) socket.emit('webrtc:hangup',{targetId:peerId});
+  renderUsers();
+  // still in earshot but dropped (network blip)? try again
+  if(!sendHangup && nearbyIds.includes(peerId) && socket?.connected) setTimeout(()=>{ if(nearbyIds.includes(peerId)) startCall(peerId); },1500);
 }
 
 function updateGain(peerId){
-  const ap=audioPeers[peerId],u=users[peerId]; if(!ap||!u) return;
-  const dist=Math.sqrt((u.x-myX)**2+(u.y-myY)**2);
-  ap.gain.gain.setTargetAtTime(calculateGain(dist),audioCtx.currentTime,0.05);
+  const ap=audioPeers[peerId],u=users[peerId]; if(!ap||!u||!audioCtx) return;
+  const dist=Math.hypot(u.x-myX,u.y-myY);
+  ap.gain.gain.setTargetAtTime(nearbyIds.includes(peerId)?calculateGain(dist):0,audioCtx.currentTime,0.05);
 }
+function updateAllGains(){ Object.keys(audioPeers).forEach(updateGain); }
+
 
 // ══════════════════════════════════════════════════════════════════
 //  SIDEBAR
@@ -629,7 +700,7 @@ function renderUsers(){
     const isMe=u.id===myId,isNear=nearbyIds.includes(u.id),isRTC=!!peerConns[u.id];
     const div=document.createElement('div'); div.className='user-item';
     div.innerHTML=`<div class="udot" style="background:${u.color||'#4F46E5'}"></div>
-      <span class="uname">${u.name}${isMe?' (you)':''}</span>
+      <span class="uname">${esc(u.name)}${isMe?' (you)':''}</span>
       ${isRTC?'<span class="badge rtc">🔊 RTC</span>'   :''}
       ${isNear&&!isRTC?'<span class="badge near">📡</span>':''}`;
     ul.appendChild(div);
@@ -647,7 +718,7 @@ function renderMeters(){
     const dbStr=isFinite(db)?db.toFixed(1)+'dB':'-∞';
     const barColor=pct>60?'#10b981':pct>30?'#f59e0b':'#60a5fa';
     el.innerHTML+=`<div class="meter-row">
-      <span class="mlabel">${u.name}</span>
+      <span class="mlabel">${esc(u.name)}</span>
       <div class="mbar-bg"><div class="mbar" id="mb-${id}" style="width:${pct}%;background:${barColor}"></div></div>
       <span class="mdb" id="md-${id}">${dbStr}</span></div>`;
   });

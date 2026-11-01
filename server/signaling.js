@@ -20,7 +20,7 @@ function attachSignaling(io) {
     socket.on('webrtc:offer', ({ targetId, offer }) => {
       console.log(`📞 Offer: ${socket.id} → ${targetId}`);
       socket.to(targetId).emit('webrtc:offer', {
-        fromId: socket.id,
+        from: socket.id, fromId: socket.id,
         offer
       });
     });
@@ -30,7 +30,7 @@ function attachSignaling(io) {
     socket.on('webrtc:answer', ({ targetId, answer }) => {
       console.log(`✅ Answer: ${socket.id} → ${targetId}`);
       socket.to(targetId).emit('webrtc:answer', {
-        fromId: socket.id,
+        from: socket.id, fromId: socket.id,
         answer
       });
     });
@@ -39,7 +39,7 @@ function attachSignaling(io) {
     // Exchange network path candidates for NAT traversal
     socket.on('webrtc:ice-candidate', ({ targetId, candidate }) => {
       socket.to(targetId).emit('webrtc:ice-candidate', {
-        fromId: socket.id,
+        from: socket.id, fromId: socket.id,
         candidate
       });
     });
@@ -48,7 +48,7 @@ function attachSignaling(io) {
     // User moved out of earshot — tell the peer to close the connection
     socket.on('webrtc:hangup', ({ targetId }) => {
       console.log(`📴 Hangup: ${socket.id} → ${targetId}`);
-      socket.to(targetId).emit('webrtc:hangup', { fromId: socket.id });
+      socket.to(targetId).emit('webrtc:hangup', { from: socket.id, fromId: socket.id });
     });
 
   });
