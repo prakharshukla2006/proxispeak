@@ -28,3 +28,6 @@ Microphone access requires `localhost` or HTTPS. To share publicly: `cloudflared
 server/  index.js (rooms, movement, proximity)  signaling.js (WebRTC relay)  models/
 client/public/index.html  (canvas UI, WebRTC, audio engine)
 ```
+
+## Week 3 - Attenuation Engine
+Five distance-based volume curves (linear, quadratic, cubic, inverse-square, logarithmic), live dB meters on the canvas, and an optional Redis pub/sub adapter for horizontal scaling.
