@@ -364,6 +364,11 @@ function joinSpace(){
   });
 
   // ── events ──────────────────────────────────────────────────────
+  socket.on('join:error',({message})=>{
+    leaveRoom();
+    joinMsg.textContent='❌ '+message;
+  });
+
   socket.on('self:joined',({id, color, room, x, y})=>{
     myId=id; myColor=color; myRoom=room;
     // ✅ FIX: Use server-assigned spawn position

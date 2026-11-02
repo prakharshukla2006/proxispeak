@@ -19,9 +19,12 @@ const os         = require('os');
 const User                = require('./models/User');
 const Room                = require('./models/Room');
 const { attachSignaling } = require('./signaling');
+const { findNearby: nearbyIn, EARSHOT_RADIUS_PX } = require('./proximity');
 
 const INSTANCE_ID = `${os.hostname()}-${process.pid}`;
-const EARSHOT_PX  = 150;
+const EARSHOT_PX  = EARSHOT_RADIUS_PX;
+const MAX_USERS_PER_ROOM = 20;
+const WORLD_MAX = 4000; // sanity bound for coordinates
 
 // ─── Express + Socket.io ─────────────────────────────────────────────────────
 const app    = express();
@@ -57,16 +60,40 @@ function getRoomUsers(room) {
 }
 
 function findNearby(room, x, y, excludeId) {
-  return Object.values(getRoomUsers(room))
-    .filter(u => u.id !== excludeId)
-    .filter(u => Math.sqrt((u.x - x) ** 2 + (u.y - y) ** 2) <= EARSHOT_PX)
-    .map(u => u.id);
+  return nearbyIn(getRoomUsers(room), x, y, excludeId, EARSHOT_PX);
 }
 
+// Last nearby-set we told each user about: socketId → sorted id list (as string)
+const lastNearby = {};
+
+/**
+ * Recompute proximity for EVERY user in the room and notify only those whose set changed.
+ * This keeps both sides of a pair in sync (the other user also learns when you move
+ * in or out of range), which the WebRTC call/hangup logic depends on.
+ */
+function syncProximity(room, force = false) {
+  Object.values(getRoomUsers(room)).forEach(u => {
+    const ids = findNearby(room, u.x, u.y, u.id).sort();
+    const key = ids.join(',');
+    if (!force && lastNearby[u.id] === key) return;
+    lastNearby[u.id] = key;
+    io.to(u.id).emit('proximity:update', { nearbyIds: ids, radius: EARSHOT_PX });
+  });
+}
+
+const cleanText = (s, max, fallback) =>
+  String(s ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max) || fallback;
+const num = (v, fallback) => (Number.isFinite(v) ? Math.max(0, Math.min(WORLD_MAX, v)) : fallback);
+
 // ─── MongoDB ──────────────────────────────────────────────────────────────────
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.warn('⚠ MongoDB unavailable:', err.message));
+const dbReady = () => mongoose.connection.readyState === 1;
+if (process.env.MONGO_URI) {
+  mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 8000 })
+    .then(() => console.log('✅ MongoDB connected'))
+    .catch(err => console.warn('⚠ MongoDB unavailable (running in-memory only):', err.message));
+} else {
+  console.warn('⚠ MONGO_URI not set — running in-memory only (rooms will not persist)');
+}
 
 // ─── REST endpoints ───────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
@@ -83,6 +110,7 @@ app.get('/health', (req, res) => {
 
 app.get('/api/rooms', async (req, res) => {
   try {
+    if (!dbReady()) throw new Error('db offline');
     const persisted = await Room.find().sort({ lastActive: -1 }).limit(20);
     const rooms = persisted.map(r => ({
       name:       r.name,
@@ -132,26 +160,32 @@ io.on('connection', (socket) => {
   let currentRoom = null;
 
   // ── Join ──────────────────────────────────────────────────────────────────
-  socket.on('join', async ({ name, room, x, y }) => {
-    const roomName = (room || 'General').trim() || 'General';
+  socket.on('join', async (payload = {}) => {
+    if (currentRoom) return; // already joined — ignore duplicate join events
+    const { name, room, x, y } = payload;
+    const roomName = cleanText(room, 30, 'General');
+    if (Object.keys(getRoomUsers(roomName)).length >= MAX_USERS_PER_ROOM) {
+      socket.emit('join:error', { message: `Room "${roomName}" is full (${MAX_USERS_PER_ROOM} users)` });
+      return;
+    }
     const color    = COLORS[colorIndex++ % COLORS.length];
-    const spawnX   = x || Math.floor(Math.random() * 600) + 200; // random spawn
-    const spawnY   = y || Math.floor(Math.random() * 400) + 100;
+    const spawnX   = num(x, 0) || Math.floor(Math.random() * 600) + 200; // random spawn
+    const spawnY   = num(y, 0) || Math.floor(Math.random() * 400) + 100;
 
-    const userData = { id: socket.id, name: name || 'Anonymous', x: spawnX, y: spawnY, color, room: roomName };
+    const userData = { id: socket.id, name: cleanText(name, 20, 'Anonymous'), x: spawnX, y: spawnY, color, room: roomName };
 
     currentRoom = roomName;
     socket.join(roomName);
     getRoomUsers(roomName)[socket.id] = userData;
 
     // Persist room + user to MongoDB
-    Room.findOneAndUpdate(
+    if (dbReady()) Room.findOneAndUpdate(
       { name: roomName },
       { name: roomName, lastActive: new Date() },
       { upsert: true, new: true }
     ).catch(() => {});
 
-    User.findOneAndUpdate(
+    if (dbReady()) User.findOneAndUpdate(
       { socketId: socket.id },
       { socketId: socket.id, name: userData.name, color, x: spawnX, y: spawnY, room: roomName, updatedAt: new Date() },
       { upsert: true, new: true }
@@ -163,39 +197,25 @@ io.on('connection', (socket) => {
     // Send full user list to everyone in room
     io.to(roomName).emit('users:update', Object.values(getRoomUsers(roomName)));
 
-    // ✅ FIX: Immediately send proximity state to the new user (no need to move first)
-    const nearbyIds = findNearby(roomName, spawnX, spawnY, socket.id);
-    if (nearbyIds.length > 0) {
-      socket.emit('proximity:update', { nearbyIds, radius: EARSHOT_PX });
-    }
-
-    // ✅ FIX: Also update proximity for existing users who may now be near the new user
-    Object.values(getRoomUsers(roomName)).forEach(existingUser => {
-      if (existingUser.id === socket.id) return;
-      const existingSocket = io.sockets.sockets.get(existingUser.id);
-      if (!existingSocket) return;
-      const nearbyForExisting = findNearby(roomName, existingUser.x, existingUser.y, existingUser.id);
-      existingSocket.emit('proximity:update', { nearbyIds: nearbyForExisting, radius: EARSHOT_PX });
-    });
+    // Late-join fix: recompute proximity for everyone, forcing the newcomer's first update
+    delete lastNearby[socket.id];
+    syncProximity(roomName, true);
 
     console.log(`👤 ${userData.name} joined room "${roomName}" at (${Math.round(spawnX)}, ${Math.round(spawnY)})`);
   });
 
   // ── Move ──────────────────────────────────────────────────────────────────
-  socket.on('move', ({ x, y }) => {
-    if (!currentRoom || !getRoomUsers(currentRoom)[socket.id]) return;
-    getRoomUsers(currentRoom)[socket.id].x = x;
-    getRoomUsers(currentRoom)[socket.id].y = y;
+  socket.on('move', (pos = {}) => {
+    const me = currentRoom && getRoomUsers(currentRoom)[socket.id];
+    if (!me || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return;
+    const x = num(pos.x, me.x), y = num(pos.y, me.y);
+    me.x = x; me.y = y;
 
-    // Broadcast position to same room
     socket.to(currentRoom).emit('user:moved', { id: socket.id, x, y });
+    if (dbReady()) User.findOneAndUpdate({ socketId: socket.id }, { x, y, updatedAt: new Date() }).catch(() => {});
 
-    // Update MongoDB (non-blocking)
-    User.findOneAndUpdate({ socketId: socket.id }, { x, y, updatedAt: new Date() }).catch(() => {});
-
-    // Proximity check
-    const nearbyIds = findNearby(currentRoom, x, y, socket.id);
-    socket.emit('proximity:update', { nearbyIds, radius: EARSHOT_PX });
+    // Notify every user whose nearby-set changed (both sides of each pair)
+    syncProximity(currentRoom);
   });
 
   // ── Disconnect ────────────────────────────────────────────────────────────
@@ -210,9 +230,11 @@ io.on('connection', (socket) => {
       delete roomUsers[currentRoom];
     }
 
-    User.deleteOne({ socketId: socket.id }).catch(() => {});
+    delete lastNearby[socket.id];
+    if (dbReady()) User.deleteOne({ socketId: socket.id }).catch(() => {});
     io.to(currentRoom).emit('user:left',    { id: socket.id });
-    io.to(currentRoom).emit('users:update', Object.values(getRoomUsers(currentRoom) || {}));
+    io.to(currentRoom).emit('users:update', Object.values(roomUsers[currentRoom] || {}));
+    if (roomUsers[currentRoom]) syncProximity(currentRoom);
   });
 });
 
@@ -229,3 +251,6 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`   Health:   http://localhost:${PORT}/health`);
   console.log('');
 });
+
+process.on('unhandledRejection', err => console.warn('⚠ Unhandled rejection:', err?.message || err));
+process.on('uncaughtException',  err => console.error('⚠ Uncaught exception:', err));

@@ -1,27 +1,19 @@
-const User = require('./models/User');
-
-const EARSHOT_RADIUS_PX = 100;
-
 /**
- * Find all users within pixel radius of (x, y).
- *
- * Uses MongoDB's flat '2d' index with the $near operator.
- * Syntax for 2d index: { $near: [x, y], $maxDistance: pixels }
- * (NOT the GeoJSON $geometry form — that's only for 2dsphere)
+ * ProxiSpeak — proximity helpers.
+ * Distance is calculated in memory (Euclidean, canvas pixels). MongoDB geo indexes
+ * were dropped because they reject plain pixel coordinates.
  */
-async function getUsersInEarshot(x, y, excludeSocketId) {
-  const nearby = await User.find({
-    socketId: { $ne: excludeSocketId },
-    location: {
-      $near:       [x, y],
-      $maxDistance: EARSHOT_RADIUS_PX
-    }
-  });
-  return nearby;
-}
+const EARSHOT_RADIUS_PX = 150;
 
 function getDistance(x1, y1, x2, y2) {
-  return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+  return Math.hypot(x2 - x1, y2 - y1);
 }
 
-module.exports = { getUsersInEarshot, getDistance, EARSHOT_RADIUS_PX };
+/** Ids of users (from a { id → user } map) within earshot of (x, y). */
+function findNearby(users, x, y, excludeId, radius = EARSHOT_RADIUS_PX) {
+  return Object.values(users)
+    .filter(u => u.id !== excludeId && getDistance(u.x, u.y, x, y) <= radius)
+    .map(u => u.id);
+}
+
+module.exports = { getDistance, findNearby, EARSHOT_RADIUS_PX };
