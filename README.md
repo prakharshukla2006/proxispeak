@@ -34,3 +34,14 @@ Five distance-based volume curves (linear, quadratic, cubic, inverse-square, log
 
 ## Week 3 - Attenuation Engine
 Five distance-based volume curves (linear, quadratic, cubic, inverse-square, logarithmic), live dB meters on the canvas, and an optional Redis pub/sub adapter for horizontal scaling.
+
+### Attenuation formulas (r = distance / 150px earshot, gain 0..1)
+| Curve | Gain |
+|---|---|
+| Linear | 1 - r |
+| Quadratic | (1 - r)^2 |
+| Cubic | (1 - r)^3 |
+| Inverse square | 1 / (10 r^2 + 1) |
+| Logarithmic | 1 - log10(1 + 9r) |
+
+Gain is applied per peer through a Web Audio GainNode and shown in dB as 20 * log10(gain).
