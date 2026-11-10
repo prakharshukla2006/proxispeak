@@ -45,3 +45,10 @@ Five distance-based volume curves (linear, quadratic, cubic, inverse-square, log
 | Logarithmic | 1 - log10(1 + 9r) |
 
 Gain is applied per peer through a Web Audio GainNode and shown in dB as 20 * log10(gain).
+
+### Testing the attenuation engine
+1. Open two tabs, join the same room and enable the mic in both.
+2. Drag one avatar toward the other: the dB label on the connection line rises toward 0 dB.
+3. Drag it to the edge of the 150px ring: the meter falls toward -inf dB and the audio fades out.
+4. Switch curves in the side panel (linear, quadratic, cubic, inverse square, logarithmic) and compare how fast the volume drops at the same distance.
+5. Leave earshot: the call closes and the RTC badge disappears.
